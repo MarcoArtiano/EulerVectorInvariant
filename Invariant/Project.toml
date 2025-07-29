@@ -1,0 +1,10 @@
+name = "Invariant"
+uuid = "efae7fc9-9666-493c-9303-7f849a978ebf"
+authors = ["Marco Artiano <artianomarco97@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Trixi = "a7f1ee26-1774-49b1-8366-f1abc58fbfcb"
+
+[compat]
+Trixi = "0.13.1"
