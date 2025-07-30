@@ -1,4 +1,6 @@
 using Trixi
+using Trixi: AbstractCompressibleEulerEquations
+import Trixi: varnames, cons2cons, cons2prim, cons2entropy, entropy, FluxLMARS, boundary_condition_slip_wall, flux, max_abs_speed, max_abs_speed_naive, @muladd
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -38,20 +40,45 @@ p = (\gamma - 1) \left( \rho e - \frac{1}{2} \rho (v_1^2+v_2^2) \right)
 ```
 the pressure.
 """
-struct CompressibleEulerVectorInvariantEquations2D{RealT <: Real} <:
-       AbstractCompressibleEulerEquations{2, 4}
-    gamma::RealT               # ratio of specific heats
-    inv_gamma_minus_one::RealT # = inv(gamma - 1); can be used to write slow divisions as fast multiplications
-    function CompressibleEulerVectorInvariantEquations2D(gamma)
-        γ, inv_gamma_minus_one = promote(gamma, inv(gamma - 1))
-        new{typeof(γ)}(γ, inv_gamma_minus_one)
-    end
+
+struct CompressibleEulerVectorInvariantEquations2D{RealT<:Real} <:
+       AbstractCompressibleEulerEquations{2,4}
+    p_0::RealT
+    c_p::RealT
+    c_v::RealT
+    g::RealT
+    R::RealT
+    gamma::RealT
+    inv_gamma_minus_one::RealT
+    K::RealT
+    stolarsky_factor::RealT
+    kappa::RealT
+end
+
+function CompressibleEulerVectorInvariantEquations2D(; g = 9.81, RealT = Float64)
+    p_0 = 100_000.0
+    c_p = 1004.0
+    c_v = 717.0
+    R = c_p - c_v
+    gamma = c_p / c_v
+    inv_gamma_minus_one = inv(gamma - 1.0)
+    K = p_0 * (R / p_0)^gamma
+    stolarsky_factor = (gamma - 1.0) / gamma
+    kappa = R/c_p
+    return CompressibleEulerVectorInvariantEquations2D{RealT}(p_0, c_p, c_v, g, R,
+        gamma, inv_gamma_minus_one, K, stolarsky_factor, kappa)
 end
 
 function varnames(::typeof(cons2cons), ::CompressibleEulerVectorInvariantEquations2D)
     ("rho", "v1", "v2", "rho_theta")
 end
+#TODO: maybe we could put exner...
 varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p")
+
+@inline function source_terms_gravity(u, x, t, equations::CompressibleEulerVectorInvariantEquations2D)
+    rho, _, _, _ = u
+    return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g * rho, 0.0)
+end
 
 # TODO:
 # Calculate 1D flux for a single point in the normal direction
@@ -72,7 +99,7 @@ end
 
 # TODO: left for reference
 @inline function flux_kennedy_gruber(u_ll, u_rr, normal_direction::AbstractVector,
-                                     equations::CompressibleEulerEquations2D)
+                                     equations::CompressibleEulerVectorInvariantEquations2D)
     # Unpack left and right state
     rho_e_ll = last(u_ll)
     rho_e_rr = last(u_rr)
@@ -96,27 +123,32 @@ end
     return SVector(f1, f2, f3, f4)
 end
 
+@inline function boundary_condition_slip_wall(u_inner, normal_direction::AbstractVector,
+    x, t,
+    surface_flux_function,
+    equations::CompressibleEulerVectorInvariantEquations2D)
+    # normalize the outward pointing direction
+    normal = normal_direction / norm(normal_direction)
 
-"""
-    FluxLMARS(c)(u_ll, u_rr, orientation_or_normal_direction,
-                 equations::CompressibleEulerEquations2D)
+    # compute the normal velocity
+    u_normal = normal[1] * u_inner[2] + normal[2] * u_inner[3]
 
-Low Mach number approximate Riemann solver (LMARS) for atmospheric flows using
-an estimate `c` of the speed of sound.
+    # create the "external" boundary solution state
+    u_boundary = SVector(u_inner[1],
+        u_inner[2]- 2 * u_normal * normal[1],
+        u_inner[3] - 2 * u_normal * normal[2],
+        u_inner[4])
 
-References:
-- Xi Chen et al. (2013)
-  A Control-Volume Model of the Compressible Euler Equations with a Vertical
-  Lagrangian Coordinate
-  [DOI: 10.1175/MWR-D-12-00129.1](https://doi.org/10.1175/mwr-d-12-00129.1)
-"""
-struct FluxLMARS{SpeedOfSound}
-    # Estimate for the speed of sound
-    speed_of_sound::SpeedOfSound
+    # calculate the boundary flux
+    flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
+
+    return flux
 end
+
+
 ## TODO: Left for reference
 @inline function (flux_lmars::FluxLMARS)(u_ll, u_rr, normal_direction::AbstractVector,
-                                         equations::CompressibleEulerEquations2D)
+                                         equations::CompressibleEulerVectorInvariantEquations2D)
     c = flux_lmars.speed_of_sound
 
     # Unpack left and right state
@@ -194,27 +226,6 @@ end
                abs(v_rr) + c_rr * norm_)
 end
 
-# Called inside `FluxRotated` in `numerical_fluxes.jl` so the direction
-# has been normalized prior to this rotation of the state vector
-@inline function rotate_to_x(u, normal_vector, equations::CompressibleEulerVectorInvariantEquations2D)
-    # cos and sin of the angle between the x-axis and the normalized normal_vector are
-    # the normalized vector's x and y coordinates respectively (see unit circle).
-    c = normal_vector[1]
-    s = normal_vector[2]
-
-    # Apply the 2D rotation matrix with normal and tangent directions of the form
-    # [ 1    0    0   0;
-    #   0   n_1  n_2  0;
-    #   0   t_1  t_2  0;
-    #   0    0    0   1 ]
-    # where t_1 = -n_2 and t_2 = n_1
-
-    return SVector(u[1],
-                   c * u[2] + s * u[3],
-                   -s * u[2] + c * u[3],
-                   u[4])
-end
-
 
 @inline function max_abs_speeds(u, equations::CompressibleEulerVectorInvariantEquations2D)
     rho, v1, v2, p = cons2prim(u, equations)
@@ -229,8 +240,7 @@ end
 
     v1 = rho_v1 / rho
     v2 = rho_v2 / rho
-# TODO:
-    p = (equations.gamma - 1) * (rho_e - 0.5f0 * (rho_v1 * v1 + rho_v2 * v2))
+    p = equations.K *rho_theta^equations.gamma
 
     return SVector(rho, v1, v2, p)
 end
@@ -240,8 +250,8 @@ end
     rho, v1, v2, p = prim
     rho_v1 = rho * v1
     rho_v2 = rho * v2
-    rho_e = p * equations.inv_gamma_minus_one + 0.5f0 * (rho_v1 * v1 + rho_v2 * v2)
-    return SVector(rho, rho_v1, rho_v2, rho_e)
+    rho_theta = (p / equations.p_0)^(1 / equations.gamma) * equations.p_0 / equations.R
+    return SVector(rho, rho_v1, rho_v2, rho_theta)
 end
 
 @inline function density(u, equations::CompressibleEulerVectorInvariantEquations2D)
@@ -256,9 +266,19 @@ end
 end
 
 @inline function pressure(u, equations::CompressibleEulerVectorInvariantEquations2D)
-    rho, rho_v1, rho_v2, rho_e = u
-    p = (equations.gamma - 1) * (rho_e - 0.5f0 * (rho_v1^2 + rho_v2^2) / rho)
+    rho, v1, v2, rho_theta = u
+    p = equations.K *rho_theta^equations.gamma
     return p
+end
+
+@inline function cons2primexner(u, equations::CompressibleEulerVectorInvariantEquations2D)
+
+    rho, v1, v2, rho_theta = u
+
+    v1 = rho_v1 / rho
+    v2 = rho_v2 / rho
+    exner = equations.c_p * (rho_theta*equations.R/equations.p_0)^(equations.R/equations.c_v)
+    return SVector(rho, v1, v2, exner)
 end
 
 end # @muladd
