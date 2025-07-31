@@ -116,90 +116,37 @@ end
     return SVector(f1, f2, f3, f4)
 end
 
-
-# TODO: left for reference
-@inline function flux_kennedy_gruber(u_ll, u_rr, normal_direction::AbstractVector,
-                                     equations::CompressibleEulerVectorInvariantEquations2D)
-    # Unpack left and right state
-    rho_e_ll = last(u_ll)
-    rho_e_rr = last(u_rr)
-    rho_ll, v1_ll, v2_ll, p_ll = cons2prim(u_ll, equations)
-    rho_rr, v1_rr, v2_rr, p_rr = cons2prim(u_rr, equations)
+@inline function flux_central_invariant(u_ll, u_rr, orientation::Integer,
+                                 equations::CompressibleEulerVectorInvariantEquations2D)
+    rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+    rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr                                
+    rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+    theta_ll = rho_theta_ll / rho_ll
+    theta_rr = rho_theta_rr / rho_rr
 
     # Average each factor of products in flux
     rho_avg = 0.5f0 * (rho_ll + rho_rr)
     v1_avg = 0.5f0 * (v1_ll + v1_rr)
     v2_avg = 0.5f0 * (v2_ll + v2_rr)
-    v_dot_n_avg = v1_avg * normal_direction[1] + v2_avg * normal_direction[2]
-    p_avg = 0.5f0 * (p_ll + p_rr)
-    e_avg = 0.5f0 * (rho_e_ll / rho_ll + rho_e_rr / rho_rr)
+    exner_avg = 0.5f0 * (exner_ll + exner_rr)
+    theta_avg = 0.5f0 * (theta_ll + theta_rr)
+    kin_avg = 0.5f0 * (v1_ll * v1_rr + v2_ll * v2_rr)
 
-    # Calculate fluxes depending on normal_direction
-    f1 = rho_avg * v_dot_n_avg
-    f2 = f1 * v1_avg + p_avg * normal_direction[1]
-    f3 = f1 * v2_avg + p_avg * normal_direction[2]
-    f4 = f1 * e_avg + p_avg * v_dot_n_avg
-
-    return SVector(f1, f2, f3, f4)
-end
-
-@inline function boundary_condition_slip_wall(u_inner, normal_direction::AbstractVector,
-    x, t,
-    surface_flux_function,
-    equations::CompressibleEulerVectorInvariantEquations2D)
-    # normalize the outward pointing direction
-    normal = normal_direction / norm(normal_direction)
-
-    # compute the normal velocity
-    u_normal = normal[1] * u_inner[2] + normal[2] * u_inner[3]
-
-    # create the "external" boundary solution state
-    u_boundary = SVector(u_inner[1],
-        u_inner[2]- 2 * u_normal * normal[1],
-        u_inner[3] - 2 * u_normal * normal[2],
-        u_inner[4])
-
-    # calculate the boundary flux
-    flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
-
-    return flux
-end
-
-
-## TODO: Left for reference
-@inline function (flux_lmars::FluxLMARS)(u_ll, u_rr, normal_direction::AbstractVector,
-                                         equations::CompressibleEulerVectorInvariantEquations2D)
-    c = flux_lmars.speed_of_sound
-
-    # Unpack left and right state
-    rho_ll, v1_ll, v2_ll, p_ll = cons2prim(u_ll, equations)
-    rho_rr, v1_rr, v2_rr, p_rr = cons2prim(u_rr, equations)
-
-    v_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
-    v_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-
-    # Note that this is the same as computing v_ll and v_rr with a normalized normal vector
-    # and then multiplying v by `norm_` again, but this version is slightly faster.
-    norm_ = norm(normal_direction)
-
-    rho = 0.5f0 * (rho_ll + rho_rr)
-    p = 0.5f0 * (p_ll + p_rr) - 0.5f0 * c * rho * (v_rr - v_ll) / norm_
-    v = 0.5f0 * (v_ll + v_rr) - 1 / (2 * c * rho) * (p_rr - p_ll) * norm_
-
-    # We treat the energy term analogous to the potential temperature term in the paper by
-    # Chen et al., i.e. we use p_ll and p_rr, and not p
-    if v >= 0
-        f1, f2, f3, f4 = u_ll * v
-        f4 = f4 + p_ll * v
+    # Calculate fluxes depending on orientation
+    if orientation == 1
+        f1 = rho_avg * v1_avg
+        f2 = -v2_ll * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg
+        f3 = v1_ll  * v2_avg
+        f4 = theta_avg * f1
     else
-        f1, f2, f3, f4 = u_rr * v
-        f4 = f4 + p_rr * v
+        f1 = rho_avg * v2_avg
+        f2 = v2_ll * v1_avg
+        f3 = -v1_ll * v1_avg + + kin_avg * 0.5 + theta_avg * exner_avg
+        f4 = theta_avg * f1
     end
 
-    return SVector(f1,
-                   f2 + p * normal_direction[1],
-                   f3 + p * normal_direction[2],
-                   f4)
+    return SVector(f1, f2, f3, f4)
 end
 
 
