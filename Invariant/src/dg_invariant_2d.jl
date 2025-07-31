@@ -88,7 +88,7 @@ import Trixi: calc_volume_integral!
 				du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * theta * derivative_split[ii, i] * contravariant_flux1[1] + 0.5 * contravariant_flux1[1] * derivative_split[ii, i] * theta
 
 				## Momentum: conservative
-				du[2, ii, j, element] = du[2, ii, j, element] - contravariant_flux2[1] / rho * derivative_split[ii, i] * u_covariant_2 + 0.5 * derivative_split[ii, i] * normu + theta * derivative_split[ii, i] * exner
+				du[2, ii, j, element] = du[2, ii, j, element] - contravariant_flux2[1] / rho * derivative_split[ii, i] * u_covariant_2 + 0.5 * derivative_split[ii, i] * normu + (theta * derivative_split[ii, i] * exner) * Ja11
 
 				du[3, ii, j, element] = du[3, ii, j, element] + contravariant_flux1[1] / rho * derivative_split[ii, i] * u_covariant_2
 			end
@@ -106,7 +106,7 @@ import Trixi: calc_volume_integral!
 				## Momentum:
 				du[2, i, jj, element] = du[2, i, jj, element] + contravariant_flux2[1] / rho * derivative_split[jj, j] * u_covariant_2
 
-				du[3, i, jj, element] = du[3, i, jj, element] - contravariant_flux1[1] / rho * derivative_split[jj, j] * u_covariant_1 + 0.5 * derivative_split[jj, j] * normu + theta * derivative_split[jj, j] * exner
+				du[3, i, jj, element] = du[3, i, jj, element] - contravariant_flux1[1] / rho * derivative_split[jj, j] * u_covariant_1 + 0.5 * derivative_split[jj, j] * normu + (theta * derivative_split[jj, j] * exner) * Ja22
 			end
 		end
 
