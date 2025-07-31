@@ -97,6 +97,26 @@ end
     return SVector(f1, f2, f3, f4)
 end
 
+@inline function flux(u, orientation::Integer, equations::CompressibleEulerVectorInvariant2D)
+    rho, v1, v2, rho_theta = u
+    v1 = rho_v1 / rho
+    v2 = rho_v2 / rho
+    p = (equations.gamma - 1) * (rho_e - 0.5f0 * (rho_v1 * v1 + rho_v2 * v2))
+    if orientation == 1
+        f1 = rho * v1
+        f2 = 0
+        f3 = 0
+        f4 = rho_theta * v1
+    else
+        f1 = rho * v2
+        f2 = 0
+        f3 = 0
+        f4 = rho_theta * v2
+    end
+    return SVector(f1, f2, f3, f4)
+end
+
+
 # TODO: left for reference
 @inline function flux_kennedy_gruber(u_ll, u_rr, normal_direction::AbstractVector,
                                      equations::CompressibleEulerVectorInvariantEquations2D)
