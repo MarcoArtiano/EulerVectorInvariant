@@ -37,7 +37,7 @@ end
     for j in eachnode(dg), i in eachnode(dg)
         u_node = get_node_vars(u, equations, dg, i, j, element)
         ## rho, v1, v2, rho_theta
-
+        exner = exner_pressure(u_node, equations)
         flux1 = flux(u_node, 1, equations) #rho_v1, 0 , 0, rho_theta_v1
         flux2 = flux(u_node, 2, equations) #rho_v2, 0 , 0, rho_theta_v2
         rho = u_node[1]

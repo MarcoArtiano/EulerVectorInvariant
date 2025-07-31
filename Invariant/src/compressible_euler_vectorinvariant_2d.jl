@@ -301,4 +301,12 @@ end
     return SVector(rho, v1, v2, exner)
 end
 
+@inline function exner_pressure(u, equations::CompressibleEulerVectorInvariantEquations2D)
+
+    _, _, _, rho_theta = u
+
+    exner = equations.c_p * (rho_theta*equations.R/equations.p_0)^(equations.R/equations.c_v)
+    return exner
+end
+
 end # @muladd
