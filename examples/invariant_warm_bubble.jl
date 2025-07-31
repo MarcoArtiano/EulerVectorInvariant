@@ -47,24 +47,29 @@ end
 # semidiscretization of the compressible Euler equations
 equations = CompressibleEulerVectorInvariantEquations2D()
 
-boundary_conditions = (x_neg = boundary_condition_periodic,
-	x_pos = boundary_condition_periodic,
-	y_neg = boundary_condition_slip_wall,
-	y_pos = boundary_condition_slip_wall)
+boundary_conditions = Dict(:y_neg => boundary_condition_slip_wall,
+		           :y_pos => boundary_condition_slip_wall)
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
 
-surface_flux = flux_central_invariant
-
-solver = DGSEM(basis, surface_flux)
+surface_flux = (flux_surface_cons, flux_surface_noncons)
+volume_flux = (flux_volume_cons, flux_volume_noncons)
+volume_integral = VolumeIntegralFluxDifferencing(volume_flux)
+solver = DGSEM(basis, surface_flux, volume_integral)
 
 coordinates_min = (0.0, 0.0)
 coordinates_max = (20_000.0, 10_000.0)
 
-cells_per_dimension = (16, 16)
-mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
-	periodicity = (true, false))
+#cells_per_dimension = (16, 16)
+#mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
+#	periodicity = (true, false))
+
+trees_per_dimension = (64, 32)
+
+mesh = P4estMesh(trees_per_dimension, polydeg = polydeg,
+	coordinates_min = coordinates_min, coordinates_max = coordinates_max,
+	periodicity = (true, false), initial_refinement_level = 0)
 
 semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubble, solver,
 	source_terms = source_terms_gravity,
@@ -72,9 +77,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubb
 
 ###############################################################################
 # ODE solvers, callbacks etc.
-dt = 1e-3
-tspan = (0.0, dt)  # 1000 seconds final time
-
+tspan = (0.0, 1000.0)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -85,15 +88,19 @@ analysis_callback = AnalysisCallback(semi, interval = analysis_interval)
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 
+stepsize_callback = StepsizeCallback(cfl = 1.0)
+
 callbacks = CallbackSet(summary_callback,
 	analysis_callback,
-	alive_callback)
+	alive_callback,
+	stepsize_callback)
 
 ###############################################################################
 # run the simulation
 sol = solve(ode,
-	    Euler();
-	#CarpenterKennedy2N54(williamson_condition = false);
+	#Euler();
+	CarpenterKennedy2N54(williamson_condition = false);
 	maxiters = 1.0e7,
-	dt = dt, # solve needs some value here but it will be overwritten by the stepsize_callback
-	ode_default_options()..., callback = callbacks, adaptive = false);
+	dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
+	ode_default_options()..., callback = callbacks);
+

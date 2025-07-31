@@ -1,6 +1,6 @@
 using Trixi
-using Trixi: AbstractCompressibleEulerEquations
-import Trixi: varnames, cons2cons, cons2prim, cons2entropy, entropy, FluxLMARS, boundary_condition_slip_wall, flux, max_abs_speeds, max_abs_speed, max_abs_speed_naive, @muladd
+using Trixi: AbstractCompressibleEulerEquations, @muladd, norm
+import Trixi: varnames, cons2cons, cons2prim, cons2entropy, entropy, FluxLMARS, boundary_condition_slip_wall, flux, max_abs_speeds, max_abs_speed, max_abs_speed_naive, have_nonconservative_terms, True
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -72,104 +72,69 @@ end
 function varnames(::typeof(cons2cons), ::CompressibleEulerVectorInvariantEquations2D)
 	("rho", "v1", "v2", "rho_theta")
 end
-#TODO: maybe we could put exner...
+
+	have_nonconservative_terms(::CompressibleEulerVectorInvariantEquations2D) = True()
+
 varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p")
 
 @inline function source_terms_gravity(u, x, t, equations::CompressibleEulerVectorInvariantEquations2D)
-	rho, _, _, _ = u
-	return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g * rho, 0.0)
+	return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g, zero(eltype(u)))
 end
 
-# TODO:
-# Calculate 1D flux for a single point in the normal direction
-# Note, this directional vector is not normalized
-@inline function flux(u, normal_direction::AbstractVector,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-	rho_e = last(u)
-	rho, v1, v2, p = cons2prim(u, equations)
+@inline function Trixi.boundary_condition_slip_wall(u_inner,
+                                                    normal_direction::AbstractVector,
+                                                    x, t,
+                                                    surface_flux_functions,
+                                                    equations::CompressibleEulerVectorInvariantEquations2D)
+    surface_flux_function, nonconservative_flux_function = surface_flux_functions
 
-	v_normal = v1 * normal_direction[1] + v2 * normal_direction[2]
-	rho_v_normal = rho * v_normal
-	f1 = rho_v_normal
-	f2 = rho_v_normal * v1 + p * normal_direction[1]
-	f3 = rho_v_normal * v2 + p * normal_direction[2]
-	f4 = (rho_e + p) * v_normal
-	return SVector(f1, f2, f3, f4)
+    # normalize the outward pointing direction
+    normal = normal_direction / norm(normal_direction)
+
+    # compute the normal velocity
+    u_normal = normal[1] * u_inner[2] + normal[2] * u_inner[3]
+
+    # create the "external" boundary solution state
+    u_boundary = SVector(u_inner[1],
+                         u_inner[2] - 2 * u_normal * normal[1],
+                         u_inner[3] - 2 * u_normal * normal[2],
+                         u_inner[4])
+
+    # calculate the boundary flux
+    flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
+    noncons_flux = nonconservative_flux_function(u_inner, u_boundary, normal_direction,
+                                                 equations)
+    return flux, noncons_flux
 end
 
-@inline function flux(u, orientation::Integer, equations::CompressibleEulerVectorInvariantEquations2D)
-	rho, v1, v2, rho_theta = u
-	if orientation == 1
-		f1 = rho * v1
-		f2 = 0
-		f3 = 0
-		f4 = rho_theta * v1
-	else
-		f1 = rho * v2
-		f2 = 0
-		f3 = 0
-		f4 = rho_theta * v2
-	end
-	return SVector(f1, f2, f3, f4)
+@inline function Trixi.boundary_condition_slip_wall(u_inner, orientation,
+                                                    direction, x, t,
+                                                    surface_flux_functions,
+                                                    equations::CompressibleEulerVectorInvariantEquations2D)
+    surface_flux_function, nonconservative_flux_function = surface_flux_functions
+
+    ## get the appropriate normal vector from the orientation
+    if orientation == 1
+        u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4])
+    else # orientation == 2
+        u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4])
+    end
+
+    # Calculate boundary flux
+    if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
+        flux = surface_flux_function(u_inner, u_boundary, orientation, equations)
+        noncons_flux = nonconservative_flux_function(u_inner, u_boundary, orientation,
+                                                     equations)
+    else # u_boundary is "left" of boundary, u_inner is "right" of boundary
+        flux = surface_flux_function(u_boundary, u_inner, orientation, equations)
+        noncons_flux = nonconservative_flux_function(u_boundary, u_inner, orientation,
+                                                     equations)
+    end
+
+    return flux, noncons_flux
 end
 
-
-@inline function boundary_condition_slip_wall(u_inner, orientation,
-	direction, x, t,
-	surface_flux_function,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-
-	## get the appropriate normal vector from the orientation
-	if orientation == 1
-		u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4])
-	else # orientation == 2
-		u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4])
-	end
-
-	# Calculate boundary flux
-	if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
-		flux = surface_flux_function(u_inner, u_boundary, orientation, equations)
-	else # u_boundary is "left" of boundary, u_inner is "right" of boundary
-		flux = surface_flux_function(u_boundary, u_inner, orientation, equations)
-	end
-
-	return flux
-end
-
-@inline function flux_central_invariant(u_ll, u_rr, orientation::Integer,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
-	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
-	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
-	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
-	theta_ll = rho_theta_ll / rho_ll
-	theta_rr = rho_theta_rr / rho_rr
-
-	# Average each factor of products in flux
-	rho_avg = 0.5f0 * (rho_ll + rho_rr)
-	v1_avg = 0.5f0 * (v1_ll + v1_rr)
-	v2_avg = 0.5f0 * (v2_ll + v2_rr)
-	exner_avg = 0.5f0 * (exner_ll + exner_rr)
-	theta_avg = 0.5f0 * (theta_ll + theta_rr)
-	kin_avg = 0.5f0 * (v1_ll * v1_rr + v2_ll * v2_rr)
-
-	# Calculate fluxes depending on orientation
-	if orientation == 1
-		f1 = rho_avg * v1_avg
-		f2 = -v2_ll * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg
-		f3 = v1_ll * v2_avg
-		f4 = theta_avg * f1
-	else
-		f1 = rho_avg * v2_avg
-		f2 = v2_ll * v1_avg
-		f3 = -v1_ll * v1_avg + +kin_avg * 0.5 + theta_avg * exner_avg
-		f4 = theta_avg * f1
-	end
-
-	return SVector(f1, f2, f3, f4)
-end
-
-@inline function flux_central_invariant(u_ll, u_rr, normal_direction::AbstractVector,
+@inline function flux_surface_cons(u_ll, u_rr, normal_direction::AbstractVector,
 	equations::CompressibleEulerVectorInvariantEquations2D)
 	# Unpack left and right state
 	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
@@ -191,10 +156,108 @@ end
 
     ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
     	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-	f2 = (-v2_rr * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg) * normal_direction[1] + normal_direction[2] * (v2_rr * v1_avg)
-	f3 = (v1_rr * v2_avg) * normal_direction[1] + normal_direction[2] * (-v1_rr * v1_avg + + kin_avg * 0.5 + theta_avg * exner_avg)
+	f2 = kin_avg * 0.5f0 * normal_direction[1]
+	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
 
+	return SVector(f1, f2, f3, f4)
+end
+
+@inline function flux_volume_cons(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+
+    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+    	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	f2 = kin_avg * 0.5f0 * normal_direction[1]
+	f3 = kin_avg * 0.5f0 * normal_direction[2]
+	f4 = f1 * theta_avg
+
+	return SVector(f1, f2, f3, f4)
+end
+
+
+@inline function flux_zero(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+
+	return SVector(0, 0, 0, 0)
+end
+
+@inline function flux_volume_noncons(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+	
+	jump_v1 = v1_rr - v1_ll
+	jump_v2 = v2_rr - v1_ll
+
+    	f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+#	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
+	f4 = 0.0
+	return SVector(f1, f2, f3, f4)
+end
+
+
+@inline function flux_surface_noncons(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+	
+	jump_v1 = v1_rr - v1_ll
+	jump_v2 = v2_rr - v1_ll
+
+    	f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+	f4 = 0.0
 	return SVector(f1, f2, f3, f4)
 end
 
