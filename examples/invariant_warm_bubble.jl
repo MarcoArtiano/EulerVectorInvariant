@@ -73,7 +73,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubb
 ###############################################################################
 # ODE solvers, callbacks etc.
 dt = 1e-3
-tspan = (0.0, dt)  # 1000 seconds final time
+tspan = (0.0, 1.0)  # 1000 seconds final time
 
 ode = semidiscretize(semi, tspan)
 
