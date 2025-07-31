@@ -33,6 +33,12 @@ end
     # This can (hopefully) be optimized away due to constant propagation.
     @unpack derivative_dhat = dg.basis
     @unpack contravariant_vectors = cache.elements
+    ## Correction of the derivative operator for the strong form
+    derivative_dhat[1, 1] -= 1 / weights[1]
+	derivative_dhat[end, end] += 1 / weights[end]
+    @. derivative_dhat = derivative_dhat*0.5
+    derivative_dhat[1, 1] += 1 / weights[1]
+	derivative_dhat[end, end] -= 1 / weights[end]
 
     for j in eachnode(dg), i in eachnode(dg)
         u_node = get_node_vars(u, equations, dg, i, j, element)
