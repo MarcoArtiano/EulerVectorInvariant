@@ -4,8 +4,9 @@ using Invariant.Trixi
 
 # Initial condition
 function initial_condition_warm_bubble(x, t, equations::CompressibleEulerVectorInvariantEquations2D)
-    @unpack g, c_p, c_v = setup
-
+    g = equations.g
+    c_p = equations.c_p
+    c_v = equations.c_v
     # center of perturbation
     center_x = 10000.0
     center_z = 2000.0
