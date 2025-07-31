@@ -53,7 +53,10 @@ boundary_conditions = Dict(:y_neg => boundary_condition_slip_wall,
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
 
+surface_flux_diss = FluxPlusDissipation(flux_surface_cons,DissipationLocalLaxFriedrichs(max_abs_speed_naive))
+
 surface_flux = (flux_surface_cons, flux_surface_noncons)
+surface_flux = (surface_flux_diss, flux_surface_noncons)
 volume_flux = (flux_volume_cons, flux_volume_noncons)
 volume_integral = VolumeIntegralFluxDifferencing(volume_flux)
 solver = DGSEM(basis, surface_flux, volume_integral)
@@ -65,7 +68,7 @@ coordinates_max = (20_000.0, 10_000.0)
 #mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
 #	periodicity = (true, false))
 
-trees_per_dimension = (64, 32)
+trees_per_dimension = (32, 32)
 
 mesh = P4estMesh(trees_per_dimension, polydeg = polydeg,
 	coordinates_min = coordinates_min, coordinates_max = coordinates_max,
