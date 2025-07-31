@@ -62,11 +62,19 @@ end
         Ja11, Ja12 = get_contravariant_vector(1, contravariant_vectors, i, j, element)
         contravariant_flux1 = Ja11 * flux1 + Ja12 * flux2 
         
+        ## Y Direction
+        # Compute the contravariant flux by taking the scalar product of the
+        # second contravariant vector Ja^2 and the flux vector
+        Ja21, Ja22 = get_contravariant_vector(2, contravariant_vectors, i, j, element)
+        contravariant_flux2 = Ja21 * flux1 + Ja22 * flux2
+
         a11, a12 = get_covariant_vector(1, contravariant_vectors, i, j, element)
         a21, a22 = get_covariant_vector(2, contravariant_vectors, i, j, element)
 
         u_covariant_1 = a11 * u_node[2] + a12 * u_node[3]
         u_covariant_2 = a21 * u_node[2] + a22 * u_node[3]
+
+        normu = contravariant_flux1[1]/rho * u_covariant_1 + contravariant_flux2[1]/rho * u_covariant_2
 
         for ii in eachnode(dg)
             ## Density
@@ -78,21 +86,11 @@ end
             ## Potential Temperature: non - conservative
             du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * theta * derivative_split[ii, i] * contravariant_flux1[1] + 0.5 * contravariant_flux1[1] * derivative_split[ii, i] * theta
 
-            normu = contravariant_flux1[1]/rho * u_covariant_1 + contravariant_flux1[2]/rho * u_covariant_2
             ## Momentum: conservative
             du[2, ii, j, element] = du[2, ii, j, element] - contravariant_flux1[2]/rho * derivative_split[ii, i] * u_covariant_2 + 0.5 * derivative_split[ii, i] * normu + theta * derivative_split[ii, i] * exner
 
             du[3, ii, j, element] = du[3, ii, j, element] + contravariant_flux1[1]/rho * derivative_split[ii, i] * u_covariant_2
-
-        end
-
-        ## Y Direction
-
-        # Compute the contravariant flux by taking the scalar product of the
-        # second contravariant vector Ja^2 and the flux vector
-        Ja21, Ja22 = get_contravariant_vector(2, contravariant_vectors, i, j, element)
-        contravariant_flux2 = Ja21 * flux1 + Ja22 * flux2
-        normu = contravariant_flux1[1]/rho * u_covariant_1 + contravariant_flux2[1]/rho * u_covariant_2
+        end      
 
         for jj in eachnode(dg)
             ## Density

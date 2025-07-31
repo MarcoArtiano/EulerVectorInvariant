@@ -1,6 +1,7 @@
 using OrdinaryDiffEqLowStorageRK
 using Invariant
 using Invariant.Trixi
+using Plots
 
 # Initial condition
 function initial_condition_warm_bubble(x, t, equations::CompressibleEulerVectorInvariantEquations2D)
