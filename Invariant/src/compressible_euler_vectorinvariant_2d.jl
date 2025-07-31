@@ -1,6 +1,6 @@
 using Trixi
 using Trixi: AbstractCompressibleEulerEquations
-import Trixi: varnames, cons2cons, cons2prim, cons2entropy, entropy, FluxLMARS, boundary_condition_slip_wall, flux, max_abs_speed, max_abs_speed_naive, @muladd
+import Trixi: varnames, cons2cons, cons2prim, cons2entropy, entropy, FluxLMARS, boundary_condition_slip_wall, flux, max_abs_speeds, max_abs_speed, max_abs_speed_naive, @muladd
 # By default, Julia/LLVM does not use fused multiply-add operations (FMAs).
 # Since these FMAs can increase the performance of many numerical algorithms,
 # we need to opt-in explicitly.
@@ -97,11 +97,8 @@ end
     return SVector(f1, f2, f3, f4)
 end
 
-@inline function flux(u, orientation::Integer, equations::CompressibleEulerVectorInvariant2D)
+@inline function flux(u, orientation::Integer, equations::CompressibleEulerVectorInvariantEquations2D)
     rho, v1, v2, rho_theta = u
-    v1 = rho_v1 / rho
-    v2 = rho_v2 / rho
-    p = (equations.gamma - 1) * (rho_e - 0.5f0 * (rho_v1 * v1 + rho_v2 * v2))
     if orientation == 1
         f1 = rho * v1
         f2 = 0
@@ -114,6 +111,29 @@ end
         f4 = rho_theta * v2
     end
     return SVector(f1, f2, f3, f4)
+end
+
+
+@inline function boundary_condition_slip_wall(u_inner, orientation,
+                                                    direction, x, t,
+                                                    surface_flux_function,
+                                                    equations::CompressibleEulerVectorInvariantEquations2D)
+
+    ## get the appropriate normal vector from the orientation
+    if orientation == 1
+        u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4])
+    else # orientation == 2
+        u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4])
+    end
+
+    # Calculate boundary flux
+    if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
+        flux = surface_flux_function(u_inner, u_boundary, orientation, equations)
+    else # u_boundary is "left" of boundary, u_inner is "right" of boundary
+        flux = surface_flux_function(u_boundary, u_inner, orientation, equations)
+    end
+
+    return flux
 end
 
 @inline function flux_central_invariant(u_ll, u_rr, orientation::Integer,
@@ -149,6 +169,71 @@ end
     return SVector(f1, f2, f3, f4)
 end
 
+@inline function flux_central_invariant(u_ll, u_rr, normal_direction::AbstractVector,
+                                    equations::CompressibleEulerVectorInvariantEquations2D)
+    # Unpack left and right state
+    rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+    rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr                                
+    rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+    theta_ll = rho_theta_ll / rho_ll
+    theta_rr = rho_theta_rr / rho_rr
+
+    # Average each factor of products in flux
+    rho_avg = 0.5f0 * (rho_ll + rho_rr)
+    v1_avg = 0.5f0 * (v1_ll + v1_rr)
+    v2_avg = 0.5f0 * (v2_ll + v2_rr)
+    exner_avg = 0.5f0 * (exner_ll + exner_rr)
+    theta_avg = 0.5f0 * (theta_ll + theta_rr)
+    kin_avg = 0.5f0 * (v1_ll * v1_rr + v2_ll * v2_rr)
+    v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+    v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+
+    # Multiply with average of normal velocities
+    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+    f2 = (-v2_ll * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg) * normal_direction[1] + normal_direction[2] * (v2_ll * v1_avg)
+    f3 = (v1_ll  * v2_avg) * normal_direction[1] + normal_direction[2] * (-v1_ll * v1_avg + + kin_avg * 0.5 + theta_avg * exner_avg )
+    f4 = f1 * theta_avg
+
+    return SVector(f1, f2, f3, f4)
+end
+
+
+@inline function max_abs_speed(u_ll, u_rr, orientation::Integer,
+                               equations::CompressibleEulerVectorInvariantEquations2D)
+    rho_ll, v1_ll, v2_ll, p_ll = cons2prim(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, p_rr = cons2prim(u_rr, equations)
+
+    # Get the velocity value in the appropriate direction
+    if orientation == 1
+        v_ll = v1_ll
+        v_rr = v1_rr
+    else # orientation == 2
+        v_ll = v2_ll
+        v_rr = v2_rr
+    end
+    # Calculate sound speeds
+    c_ll = sqrt(equations.gamma * p_ll / rho_ll)
+    c_rr = sqrt(equations.gamma * p_rr / rho_rr)
+
+    return max(abs(v_ll) + c_ll, abs(v_rr) + c_rr)
+end
+
+@inline function min_max_speed_naive(u_ll, u_rr, orientation::Integer,
+                                     equations::CompressibleEulerVectorInvariantEquations2D)
+    rho_ll, v1_ll, v2_ll, p_ll = cons2prim(u_ll, equations)
+    rho_rr, v1_rr, v2_rr, p_rr = cons2prim(u_rr, equations)
+
+    if orientation == 1 # x-direction
+        λ_min = v1_ll - sqrt(equations.gamma * p_ll / rho_ll)
+        λ_max = v1_rr + sqrt(equations.gamma * p_rr / rho_rr)
+    else # y-direction
+        λ_min = v2_ll - sqrt(equations.gamma * p_ll / rho_ll)
+        λ_max = v2_rr + sqrt(equations.gamma * p_rr / rho_rr)
+    end
+
+    return λ_min, λ_max
+end
 
 @inline function max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
                                      equations::CompressibleEulerVectorInvariantEquations2D)
@@ -193,7 +278,6 @@ end
                abs(v_rr) + c_rr * norm_)
 end
 
-
 @inline function max_abs_speeds(u, equations::CompressibleEulerVectorInvariantEquations2D)
     rho, v1, v2, p = cons2prim(u, equations)
     c = sqrt(equations.gamma * p / rho)
@@ -205,8 +289,6 @@ end
 @inline function cons2prim(u, equations::CompressibleEulerVectorInvariantEquations2D)
     rho, v1, v2, rho_theta = u
 
-    v1 = rho_v1 / rho
-    v2 = rho_v2 / rho
     p = equations.K *rho_theta^equations.gamma
 
     return SVector(rho, v1, v2, p)
@@ -215,10 +297,8 @@ end
 # Convert primitive to conservative variables
 @inline function prim2cons(prim, equations::CompressibleEulerVectorInvariantEquations2D)
     rho, v1, v2, p = prim
-    rho_v1 = rho * v1
-    rho_v2 = rho * v2
     rho_theta = (p / equations.p_0)^(1 / equations.gamma) * equations.p_0 / equations.R
-    return SVector(rho, rho_v1, rho_v2, rho_theta)
+    return SVector(rho, v1, v2, rho_theta)
 end
 
 @inline function density(u, equations::CompressibleEulerVectorInvariantEquations2D)
@@ -242,8 +322,6 @@ end
 
     rho, v1, v2, rho_theta = u
 
-    v1 = rho_v1 / rho
-    v2 = rho_v2 / rho
     exner = equations.c_p * (rho_theta*equations.R/equations.p_0)^(equations.R/equations.c_v)
     return SVector(rho, v1, v2, exner)
 end
@@ -254,6 +332,12 @@ end
 
     exner = equations.c_p * (rho_theta*equations.R/equations.p_0)^(equations.R/equations.c_v)
     return exner
+end
+
+@inline function cons2entropy(u, equations::CompressibleEulerVectorInvariantEquations2D)
+    rho, v1, v2, rho_theta = u
+
+    return SVector(0, 0, 0, 0)
 end
 
 end # @muladd

@@ -1,3 +1,4 @@
 [deps]
 Invariant = "efae7fc9-9666-493c-9303-7f849a978ebf"
 OrdinaryDiffEqLowStorageRK = "b0944070-b475-4768-8dec-fb6eb410534d"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"

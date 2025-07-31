@@ -8,6 +8,6 @@ include("dg_invariant_2d.jl")
 
 export CompressibleEulerVectorInvariantEquations2D
 
-export flux_central_invariant
+export flux_central_invariant, source_terms_gravity
 
 end # module Invariant

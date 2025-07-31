@@ -1,3 +1,8 @@
+using Trixi: @threaded, False, VolumeIntegralWeakForm, DGSEM, flux, eachelement, eachnode, get_node_vars, multiply_add_to_node_vars!, get_contravariant_vector
+import Trixi: calc_volume_integral!
+
+@muladd begin
+
 function calc_volume_integral!(du, u,
                                mesh::Union{TreeMesh{2}, StructuredMesh{2},
                                            StructuredMeshView{2}, UnstructuredMesh2D,
@@ -6,6 +11,7 @@ function calc_volume_integral!(du, u,
                                nonconservative_terms, equations::CompressibleEulerVectorInvariantEquations2D,
                                volume_integral::VolumeIntegralWeakForm,
                                dg::DGSEM, cache)
+                        
     @threaded for element in eachelement(dg, cache)
         strong_form_kernel!(du, u, element, mesh,
                           nonconservative_terms, equations,
@@ -31,14 +37,14 @@ end
                                    dg::DGSEM, cache, alpha = true)
     # true * [some floating point value] == [exactly the same floating point value]
     # This can (hopefully) be optimized away due to constant propagation.
-    @unpack derivative_dhat = dg.basis
+    @unpack derivative_split, weights = dg.basis
     @unpack contravariant_vectors = cache.elements
     ## Correction of the derivative operator for the strong form
-    derivative_dhat[1, 1] -= 1 / weights[1]
-	derivative_dhat[end, end] += 1 / weights[end]
-    @. derivative_dhat = derivative_dhat*0.5
-    derivative_dhat[1, 1] += 1 / weights[1]
-	derivative_dhat[end, end] -= 1 / weights[end]
+    derivative_split[1, 1] -= 1 / weights[1]
+	derivative_split[end, end] += 1 / weights[end]
+    @. derivative_split = derivative_split * 0.5
+    derivative_split[1, 1] += 1 / weights[1]
+	derivative_split[end, end] -= 1 / weights[end]
 
     for j in eachnode(dg), i in eachnode(dg)
         u_node = get_node_vars(u, equations, dg, i, j, element)
@@ -64,23 +70,20 @@ end
 
         for ii in eachnode(dg)
             ## Density
-            du[1, ii, j, element] = du[1, ii, j, element] + derivative_dhat[ii, i] * contravariant_flux1[1]
+            du[1, ii, j, element] = du[1, ii, j, element] + derivative_split[ii, i] * contravariant_flux1[1]
 
             ## Potential Temperature: conservative
-            du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * derivative_dhat[ii, i] * contravariant_flux1[4]
+            du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * derivative_split[ii, i] * contravariant_flux1[4]
 
             ## Potential Temperature: non - conservative
-            du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * theta * derivative_dhat[ii, i] * contravariant_flux1[1] + 0.5 * contravariant_flux1[1] * derivative_dhat[ii, i] * theta
+            du[4, ii, j, element] = du[4, ii, j, element] + 0.5 * theta * derivative_split[ii, i] * contravariant_flux1[1] + 0.5 * contravariant_flux1[1] * derivative_split[ii, i] * theta
 
             normu = contravariant_flux1[1]/rho * u_covariant_1 + contravariant_flux1[2]/rho * u_covariant_2
             ## Momentum: conservative
-            du[2, ii, j, element] = du[2, ii, j, element] - contravariant_flux1[2]/rho * derivative_dhat[ii, i] * u_covariant_2 + 0.5 * derivative_dhat[ii, i] * normu + theta * derivative_dhat[ii, i] * exner
+            du[2, ii, j, element] = du[2, ii, j, element] - contravariant_flux1[2]/rho * derivative_split[ii, i] * u_covariant_2 + 0.5 * derivative_split[ii, i] * normu + theta * derivative_split[ii, i] * exner
 
-            du[3, ii, j, element] = du[3, ii, j, element] + contravariant_flux1[1]/rho * derivative_dhat[ii, i] * u_covariant_2
+            du[3, ii, j, element] = du[3, ii, j, element] + contravariant_flux1[1]/rho * derivative_split[ii, i] * u_covariant_2
 
-            multiply_add_to_node_vars!(du, alpha * derivative_dhat[ii, i],
-                                       contravariant_flux1, equations, dg,
-                                       ii, j, element)
         end
 
         ## Y Direction
@@ -93,20 +96,22 @@ end
 
         for jj in eachnode(dg)
             ## Density
-            du[1, i, jj, element] = du[1, i, jj, element] + derivative_dhat[jj, j] * contravariant_flux2[1]
+            du[1, i, jj, element] = du[1, i, jj, element] + derivative_split[jj, j] * contravariant_flux2[1]
 
             ## Potential Temperature: conservative
-            du[4, i, jj, element] = du[4, i, jj, element] + 0.5 * derivative_dhat[jj, j] * contravariant_flux2[4]
+            du[4, i, jj, element] = du[4, i, jj, element] + 0.5 * derivative_split[jj, j] * contravariant_flux2[4]
 
             ## Potential Temperature: non - conservative
-            du[4, i, jj, element] = du[4, i, jj, element] + 0.5 * theta * derivative_dhat[jj, j] * contravariant_flux2[1] + 0.5 * contravariant_flux2[1] * derivative_dhat[jj, j] * theta
+            du[4, i, jj, element] = du[4, i, jj, element] + 0.5 * theta * derivative_split[jj, j] * contravariant_flux2[1] + 0.5 * contravariant_flux2[1] * derivative_split[jj, j] * theta
 
             ## Momentum:
-            du[2, i, jj, element] = du[2, i, jj, element] + contravariant_flux2[1]/rho * derivative_dhat[jj, j] * u_covariant_1 
+            du[2, i, jj, element] = du[2, i, jj, element] + contravariant_flux2[1]/rho * derivative_split[jj, j] * u_covariant_1 
 
-            du[3, i, jj, element] = du[3, i, jj, element] - contravariant_flux1[1]/rho * derivative_dhat[jj, j] * u_covariant_1 + 0.5 * derivative_dhat[jj, j] * normu + theta * derivative_dhat[jj, j] * exner
+            du[3, i, jj, element] = du[3, i, jj, element] - contravariant_flux1[1]/rho * derivative_split[jj, j] * u_covariant_1 + 0.5 * derivative_split[jj, j] * normu + theta * derivative_split[jj, j] * exner
         end
     end
 
     return nothing
+end
+
 end
