@@ -2,7 +2,7 @@ using OrdinaryDiffEqLowStorageRK
 using Invariant
 using Invariant.Trixi
 using Plots
-
+using OrdinaryDiffEq
 # Initial condition
 function initial_condition_warm_bubble(x, t, equations::CompressibleEulerVectorInvariantEquations2D)
 	g = equations.g
@@ -62,7 +62,7 @@ solver = DGSEM(basis, surface_flux)
 coordinates_min = (0.0, 0.0)
 coordinates_max = (20_000.0, 10_000.0)
 
-cells_per_dimension = (64, 32)
+cells_per_dimension = (16, 16)
 mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
 	periodicity = (true, false))
 
@@ -73,7 +73,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubb
 ###############################################################################
 # ODE solvers, callbacks etc.
 dt = 1e-3
-tspan = (0.0, 1.0)  # 1000 seconds final time
+tspan = (0.0, dt)  # 1000 seconds final time
 
 ode = semidiscretize(semi, tspan)
 
@@ -92,7 +92,8 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 sol = solve(ode,
-	CarpenterKennedy2N54(williamson_condition = false);
+	    Euler();
+	#CarpenterKennedy2N54(williamson_condition = false);
 	maxiters = 1.0e7,
 	dt = dt, # solve needs some value here but it will be overwritten by the stepsize_callback
 	ode_default_options()..., callback = callbacks, adaptive = false);

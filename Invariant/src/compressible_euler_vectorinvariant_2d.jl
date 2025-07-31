@@ -185,14 +185,14 @@ end
 	v2_avg = 0.5f0 * (v2_ll + v2_rr)
 	exner_avg = 0.5f0 * (exner_ll + exner_rr)
 	theta_avg = 0.5f0 * (theta_ll + theta_rr)
-	kin_avg = 0.5f0 * (v1_ll * v1_rr + v2_ll * v2_rr)
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
     ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-	f2 = (-v2_ll * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg) * normal_direction[1] + normal_direction[2] * (v2_ll * v1_avg)
-	f3 = (v1_ll * v2_avg) * normal_direction[1] + normal_direction[2] * (-v1_ll * v1_avg + + kin_avg * 0.5 + theta_avg * exner_avg)
+    	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	f2 = (-v2_rr * v2_avg + kin_avg * 0.5 + theta_avg * exner_avg) * normal_direction[1] + normal_direction[2] * (v2_rr * v1_avg)
+	f3 = (v1_rr * v2_avg) * normal_direction[1] + normal_direction[2] * (-v1_rr * v1_avg + + kin_avg * 0.5 + theta_avg * exner_avg)
 	f4 = f1 * theta_avg
 
 	return SVector(f1, f2, f3, f4)
