@@ -3,6 +3,7 @@ using Invariant
 using Invariant.Trixi
 using Plots
 using OrdinaryDiffEq
+
 # Initial condition
 function initial_condition_warm_bubble(x, t, equations::CompressibleEulerVectorInvariantEquations2D)
 	g = equations.g
@@ -48,15 +49,15 @@ end
 equations = CompressibleEulerVectorInvariantEquations2D()
 
 boundary_conditions = Dict(:y_neg => boundary_condition_slip_wall,
-		           :y_pos => boundary_condition_slip_wall)
+		           		   :y_pos => boundary_condition_slip_wall)
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
 
-surface_flux_diss = FluxPlusDissipation(flux_surface_cons,DissipationLocalLaxFriedrichs(max_abs_speed_naive))
+# surface_flux_diss = FluxPlusDissipation(flux_surface_cons,DissipationLocalLaxFriedrichs(max_abs_speed_naive))
+# surface_flux = (flux_surface_cons, flux_surface_noncons)
 
-surface_flux = (flux_surface_cons, flux_surface_noncons)
-surface_flux = (surface_flux_diss, flux_surface_noncons)
+surface_flux = (flux_surface_cons_upwind, flux_surface_noncons_upwind)
 volume_flux = (flux_volume_cons, flux_volume_noncons)
 volume_integral = VolumeIntegralFluxDifferencing(volume_flux)
 solver = DGSEM(basis, surface_flux, volume_integral)
@@ -68,7 +69,7 @@ coordinates_max = (20_000.0, 10_000.0)
 #mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
 #	periodicity = (true, false))
 
-trees_per_dimension = (32, 32)
+trees_per_dimension = (64, 32)
 
 mesh = P4estMesh(trees_per_dimension, polydeg = polydeg,
 	coordinates_min = coordinates_min, coordinates_max = coordinates_max,
@@ -80,7 +81,8 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubb
 
 ###############################################################################
 # ODE solvers, callbacks etc.
-tspan = (0.0, 1000.0)
+dt = 1.0e-3
+tspan = (0.0, 1000)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -96,7 +98,8 @@ stepsize_callback = StepsizeCallback(cfl = 1.0)
 callbacks = CallbackSet(summary_callback,
 	analysis_callback,
 	alive_callback,
-	stepsize_callback)
+	stepsize_callback
+	)
 
 ###############################################################################
 # run the simulation

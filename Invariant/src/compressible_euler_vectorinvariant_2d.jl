@@ -139,97 +139,29 @@ end
 	# Unpack left and right state
 	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
 	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
-	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
-	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+	# rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	# rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
 	theta_ll = rho_theta_ll / rho_ll
 	theta_rr = rho_theta_rr / rho_rr
 
 	# Average each factor of products in flux
 	rho_avg = 0.5f0 * (rho_ll + rho_rr)
-	v1_avg = 0.5f0 * (v1_ll + v1_rr)
-	v2_avg = 0.5f0 * (v2_ll + v2_rr)
-	exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	# v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	# v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	# exner_avg = 0.5f0 * (exner_ll + exner_rr)
 	theta_avg = 0.5f0 * (theta_ll + theta_rr)
 	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
     ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
 	f2 = kin_avg * 0.5f0 * normal_direction[1]
 	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
 
 	return SVector(f1, f2, f3, f4)
 end
-
-@inline function flux_volume_cons(u_ll, u_rr, normal_direction::AbstractVector,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-	# Unpack left and right state
-	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
-	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
-	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
-	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
-	theta_ll = rho_theta_ll / rho_ll
-	theta_rr = rho_theta_rr / rho_rr
-
-	# Average each factor of products in flux
-	rho_avg = 0.5f0 * (rho_ll + rho_rr)
-	v1_avg = 0.5f0 * (v1_ll + v1_rr)
-	v2_avg = 0.5f0 * (v2_ll + v2_rr)
-	exner_avg = 0.5f0 * (exner_ll + exner_rr)
-	theta_avg = 0.5f0 * (theta_ll + theta_rr)
-	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
-	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
-	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-
-    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-	f2 = kin_avg * 0.5f0 * normal_direction[1]
-	f3 = kin_avg * 0.5f0 * normal_direction[2]
-	f4 = f1 * theta_avg
-
-	return SVector(f1, f2, f3, f4)
-end
-
-
-@inline function flux_zero(u_ll, u_rr, normal_direction::AbstractVector,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-
-	return SVector(0, 0, 0, 0)
-end
-
-@inline function flux_volume_noncons(u_ll, u_rr, normal_direction::AbstractVector,
-	equations::CompressibleEulerVectorInvariantEquations2D)
-	# Unpack left and right state
-	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
-	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
-	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
-	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
-	theta_ll = rho_theta_ll / rho_ll
-	theta_rr = rho_theta_rr / rho_rr
-
-	# Average each factor of products in flux
-	rho_avg = 0.5f0 * (rho_ll + rho_rr)
-	v1_avg = 0.5f0 * (v1_ll + v1_rr)
-	v2_avg = 0.5f0 * (v2_ll + v2_rr)
-	exner_avg = 0.5f0 * (exner_ll + exner_rr)
-	theta_avg = 0.5f0 * (theta_ll + theta_rr)
-	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
-	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
-	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-	
-	jump_v1 = v1_rr - v1_ll
-	jump_v2 = v2_rr - v1_ll
-
-    	f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
-#	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
-	f4 = 0.0
-	return SVector(f1, f2, f3, f4)
-end
-
 
 @inline function flux_surface_noncons(u_ll, u_rr, normal_direction::AbstractVector,
 	equations::CompressibleEulerVectorInvariantEquations2D)
@@ -239,27 +171,158 @@ end
 	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
 	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
 	theta_ll = rho_theta_ll / rho_ll
-	theta_rr = rho_theta_rr / rho_rr
+	# theta_rr = rho_theta_rr / rho_rr
 
 	# Average each factor of products in flux
-	rho_avg = 0.5f0 * (rho_ll + rho_rr)
-	v1_avg = 0.5f0 * (v1_ll + v1_rr)
-	v2_avg = 0.5f0 * (v2_ll + v2_rr)
-	exner_avg = 0.5f0 * (exner_ll + exner_rr)
-	theta_avg = 0.5f0 * (theta_ll + theta_rr)
-	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
-	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
-	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+	# rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	# v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	# v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	# exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	# theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	# kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	# v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	# v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 	
 	jump_v1 = v1_rr - v1_ll
 	jump_v2 = v2_rr - v1_ll
 
-    	f1 = 0.0
+    f1 = 0.0
 	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
 	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
 	f4 = 0.0
 	return SVector(f1, f2, f3, f4)
 end
+
+@inline function flux_surface_cons_upwind(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+	
+	# rho_v_rr = v1_ll * rho_ll * normal_direction[1] + v2_ll * rho_ll * normal_direction[2]
+	# rho_v_ll = v1_rr * rho_rr * normal_direction[1] + v2_rr * rho_rr * normal_direction[2]
+	c = 340.0
+
+	c_adv = 0.5 * abs((v_dot_n_ll + v_dot_n_rr))/norm(normal_direction)
+	# diss = c / (2 * rho_avg) * ( (rho_v_rr - rho_v_ll) * normal_direction[1] + (rho_v_rr - rho_v_ll) * normal_direction[2])
+	diss1 = c / 2 *  (v_dot_n_rr - v_dot_n_ll) * normal_direction[1] / norm(normal_direction)^2
+	diss2 = c / 2 * (v_dot_n_rr - v_dot_n_ll) * normal_direction[2] / norm(normal_direction)^2
+    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 - 0.5 * c_adv * (v1_rr - v1_ll) * norm(normal_direction)	
+	f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 - 0.5 * c_adv * (v2_rr - v2_ll) * norm(normal_direction)
+
+	## If we use dissipation with rho u / rho that it should be energy stable.
+
+	
+
+	if f1 >= 0
+		f4 = f1 * theta_ll
+	else
+		f4 = f1 * theta_rr
+	end
+
+	return SVector(f1, f2, f3, f4)
+end
+
+@inline function flux_surface_noncons_upwind(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	# v1_avg = 0.5f0 * (v1_ll + v1_rr)
+	# v2_avg = 0.5f0 * (v2_ll + v2_rr)
+	# exner_avg = 0.5f0 * (exner_ll + exner_rr)
+	# theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	# kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+	
+	jump_v1 = v1_rr - v1_ll
+	jump_v2 = v2_rr - v1_ll
+	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	if f1 >= 0 
+		theta = theta_ll
+	else
+		theta = theta_rr
+	end
+
+    f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta * (exner_rr - exner_ll) * normal_direction[2]
+	f4 = 0.0
+	return SVector(f1, f2, f3, f4)
+
+end
+
+@inline function flux_volume_cons(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	theta_ll = rho_theta_ll / rho_ll
+	theta_rr = rho_theta_rr / rho_rr
+
+	# Average each factor of products in flux
+	rho_avg = 0.5f0 * (rho_ll + rho_rr)
+	theta_avg = 0.5f0 * (theta_ll + theta_rr)
+	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
+	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
+
+    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	f2 = kin_avg * 0.5f0 * normal_direction[1]
+	f3 = kin_avg * 0.5f0 * normal_direction[2]
+	f4 = f1 * theta_avg
+
+	return SVector(f1, f2, f3, f4)
+end
+
+
+@inline function flux_volume_noncons(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	# Unpack left and right state
+	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
+	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
+
+	# Average each factor of products in flux
+	
+	jump_v1 = v1_rr - v1_ll
+	jump_v2 = v2_rr - v1_ll
+
+    f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+#	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
+	f4 = 0.0
+	return SVector(f1, f2, f3, f4)
+end
+
+@inline function flux_zero(u_ll, u_rr, normal_direction::AbstractVector,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+
+	return SVector(0, 0, 0, 0)
+end
+
 
 
 @inline function max_abs_speed(u_ll, u_rr, orientation::Integer,
