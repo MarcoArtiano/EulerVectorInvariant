@@ -42,7 +42,7 @@ the pressure.
 """
 
 struct CompressibleEulerVectorInvariantEquations2D{RealT <: Real} <:
-	   AbstractCompressibleEulerEquations{2, 4}
+	   AbstractCompressibleEulerEquations{2, 5}
 	p_0::RealT
 	c_p::RealT
 	c_v::RealT
@@ -70,15 +70,15 @@ function CompressibleEulerVectorInvariantEquations2D(; g = 9.81, RealT = Float64
 end
 
 function varnames(::typeof(cons2cons), ::CompressibleEulerVectorInvariantEquations2D)
-	("rho", "v1", "v2", "rho_theta")
+	("rho", "v1", "v2", "rho_theta","phi")
 end
 
-	have_nonconservative_terms(::CompressibleEulerVectorInvariantEquations2D) = True()
+have_nonconservative_terms(::CompressibleEulerVectorInvariantEquations2D) = True()
 
-varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p")
+varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p","phi")
 
 @inline function source_terms_gravity(u, x, t, equations::CompressibleEulerVectorInvariantEquations2D)
-	return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g, zero(eltype(u)))
+	return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g, zero(eltype(u)), zero(eltype(u)))
 end
 
 @inline function Trixi.boundary_condition_slip_wall(u_inner,
@@ -98,7 +98,7 @@ end
     u_boundary = SVector(u_inner[1],
                          u_inner[2] - 2 * u_normal * normal[1],
                          u_inner[3] - 2 * u_normal * normal[2],
-                         u_inner[4])
+                         u_inner[4], u_inner[5])
 
     # calculate the boundary flux
     flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
@@ -115,9 +115,9 @@ end
 
     ## get the appropriate normal vector from the orientation
     if orientation == 1
-        u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4])
+        u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4], u_inner[5])
     else # orientation == 2
-        u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4])
+        u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4], u_inner[5])
     end
 
     # Calculate boundary flux
@@ -160,7 +160,7 @@ end
 	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
 
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 end
 
 @inline function flux_surface_noncons(u_ll, u_rr, normal_direction::AbstractVector,
@@ -187,10 +187,10 @@ end
 	jump_v2 = v2_rr - v1_ll
 
     f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2]
 	f4 = 0.0
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 end
 
 @inline function flux_surface_cons_upwind(u_ll, u_rr, normal_direction::AbstractVector,
@@ -227,7 +227,7 @@ end
 		f4 = f1 * theta_rr
 	end
 
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 end
 
 @inline function flux_surface_noncons_upwind(u_ll, u_rr, normal_direction::AbstractVector,
@@ -260,10 +260,10 @@ end
 	end
 
     f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta * (exner_rr - exner_ll) * normal_direction[2]
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[2]
 	f4 = 0.0
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 
 end
 
@@ -288,35 +288,35 @@ end
 	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
 
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 end
 
 
 @inline function flux_volume_noncons(u_ll, u_rr, normal_direction::AbstractVector,
 	equations::CompressibleEulerVectorInvariantEquations2D)
 	# Unpack left and right state
-	rho_ll, v1_ll, v2_ll, rho_theta_ll = u_ll
-	rho_rr, v1_rr, v2_rr, rho_theta_rr = u_rr
+	rho_ll, v1_ll, v2_ll, rho_theta_ll, phi_ll = u_ll
+	rho_rr, v1_rr, v2_rr, rho_theta_rr, phi_rr = u_rr
 	rho_ll, v1_ll, v2_ll, exner_ll = cons2primexner(u_ll, equations)
 	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
-
+	theta_ll = rho_theta_ll/rho_ll
 	# Average each factor of products in flux
 	
 	jump_v1 = v1_rr - v1_ll
 	jump_v2 = v2_rr - v1_ll
-
+	phi_jump = phi_rr - phi_ll
     f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + theta_ll * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1] + equations.g * phi_jump * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2] + equations.g * phi_jump * normal_direction[2]
 #	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
 	f4 = 0.0
-	return SVector(f1, f2, f3, f4)
+	return SVector(f1, f2, f3, f4, 0)
 end
 
 @inline function flux_zero(u_ll, u_rr, normal_direction::AbstractVector,
 	equations::CompressibleEulerVectorInvariantEquations2D)
 
-	return SVector(0, 0, 0, 0)
+	return SVector(0, 0, 0, 0, 0)
 end
 
 
@@ -409,18 +409,18 @@ end
 
 # Convert conservative variables to primitive
 @inline function cons2prim(u, equations::CompressibleEulerVectorInvariantEquations2D)
-	rho, v1, v2, rho_theta = u
+	rho, v1, v2, rho_theta, phi = u
 
 	p = equations.K * rho_theta^equations.gamma
 
-	return SVector(rho, v1, v2, p)
+	return SVector(rho, v1, v2, p, phi)
 end
 
 # Convert primitive to conservative variables
 @inline function prim2cons(prim, equations::CompressibleEulerVectorInvariantEquations2D)
-	rho, v1, v2, p = prim
+	rho, v1, v2, p, phi = prim
 	rho_theta = (p / equations.p_0)^(1 / equations.gamma) * equations.p_0 / equations.R
-	return SVector(rho, v1, v2, rho_theta)
+	return SVector(rho, v1, v2, rho_theta, phi)
 end
 
 @inline function density(u, equations::CompressibleEulerVectorInvariantEquations2D)
@@ -442,24 +442,34 @@ end
 
 @inline function cons2primexner(u, equations::CompressibleEulerVectorInvariantEquations2D)
 
-	rho, v1, v2, rho_theta = u
+	rho, v1, v2, rho_theta, phi = u
 
-	exner = equations.c_p * (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
-	return SVector(rho, v1, v2, exner)
+	exner =  (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
+	return SVector(rho, v1, v2, exner, phi)
 end
 
 @inline function exner_pressure(u, equations::CompressibleEulerVectorInvariantEquations2D)
 
 	_, _, _, rho_theta = u
 
-	exner = equations.c_p * (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
+	exner =  (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
 	return exner
 end
 
 @inline function cons2entropy(u, equations::CompressibleEulerVectorInvariantEquations2D)
 	rho, v1, v2, rho_theta = u
 
-	return SVector(0, 0, 0, 0)
+	return SVector(0, 0, 0, 0, 0)
+end
+
+@inline function well_balanced_v1(u, equations::CompressibleEulerVectorInvariantEquations2D)
+	rho, v1, v2, rho_theta, _ = u
+	return abs(v1)
+end
+
+@inline function well_balanced_v2(u, equations::CompressibleEulerVectorInvariantEquations2D)
+	rho, v1, v2, rho_theta, _ = u
+	return abs(v2)
 end
 
 end # @muladd
