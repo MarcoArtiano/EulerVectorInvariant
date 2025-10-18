@@ -56,9 +56,9 @@ struct CompressibleEulerVectorInvariantEquations2D{RealT <: Real} <:
 end
 
 function CompressibleEulerVectorInvariantEquations2D(; g = 9.81, RealT = Float64)
-	p_0 = 100_000.0
-	c_p = 1004.0
-	c_v = 717.0
+	p_0 = RealT(100_000.0)
+	c_p = RealT(1004.0)
+	c_v = RealT(717.0)
 	R = c_p - c_v
 	gamma = c_p / c_v
 	inv_gamma_minus_one = inv(gamma - 1.0)
@@ -70,68 +70,68 @@ function CompressibleEulerVectorInvariantEquations2D(; g = 9.81, RealT = Float64
 end
 
 function varnames(::typeof(cons2cons), ::CompressibleEulerVectorInvariantEquations2D)
-	("rho", "v1", "v2", "rho_theta","phi")
+	("rho", "v1", "v2", "rho_theta", "phi")
 end
 
 have_nonconservative_terms(::CompressibleEulerVectorInvariantEquations2D) = True()
 
-varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p","phi")
+varnames(::typeof(cons2prim), ::CompressibleEulerVectorInvariantEquations2D) = ("rho", "v1", "v2", "p", "phi")
 
 @inline function source_terms_gravity(u, x, t, equations::CompressibleEulerVectorInvariantEquations2D)
 	return SVector(zero(eltype(u)), zero(eltype(u)), -equations.g, zero(eltype(u)), zero(eltype(u)))
 end
 
 @inline function Trixi.boundary_condition_slip_wall(u_inner,
-                                                    normal_direction::AbstractVector,
-                                                    x, t,
-                                                    surface_flux_functions,
-                                                    equations::CompressibleEulerVectorInvariantEquations2D)
-    surface_flux_function, nonconservative_flux_function = surface_flux_functions
+	normal_direction::AbstractVector,
+	x, t,
+	surface_flux_functions,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	surface_flux_function, nonconservative_flux_function = surface_flux_functions
 
-    # normalize the outward pointing direction
-    normal = normal_direction / norm(normal_direction)
+	# normalize the outward pointing direction
+	normal = normal_direction / norm(normal_direction)
 
-    # compute the normal velocity
-    u_normal = normal[1] * u_inner[2] + normal[2] * u_inner[3]
+	# compute the normal velocity
+	u_normal = normal[1] * u_inner[2] + normal[2] * u_inner[3]
 
-    # create the "external" boundary solution state
-    u_boundary = SVector(u_inner[1],
-                         u_inner[2] - 2 * u_normal * normal[1],
-                         u_inner[3] - 2 * u_normal * normal[2],
-                         u_inner[4], u_inner[5])
+	# create the "external" boundary solution state
+	u_boundary = SVector(u_inner[1],
+		u_inner[2] - 2 * u_normal * normal[1],
+		u_inner[3] - 2 * u_normal * normal[2],
+		u_inner[4], u_inner[5])
 
-    # calculate the boundary flux
-    flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
-    noncons_flux = nonconservative_flux_function(u_inner, u_boundary, normal_direction,
-                                                 equations)
-    return flux, noncons_flux
+	# calculate the boundary flux
+	flux = surface_flux_function(u_inner, u_boundary, normal_direction, equations)
+	noncons_flux = nonconservative_flux_function(u_inner, u_boundary, normal_direction,
+		equations)
+	return flux, noncons_flux
 end
 
 @inline function Trixi.boundary_condition_slip_wall(u_inner, orientation,
-                                                    direction, x, t,
-                                                    surface_flux_functions,
-                                                    equations::CompressibleEulerVectorInvariantEquations2D)
-    surface_flux_function, nonconservative_flux_function = surface_flux_functions
+	direction, x, t,
+	surface_flux_functions,
+	equations::CompressibleEulerVectorInvariantEquations2D)
+	surface_flux_function, nonconservative_flux_function = surface_flux_functions
 
-    ## get the appropriate normal vector from the orientation
-    if orientation == 1
-        u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4], u_inner[5])
-    else # orientation == 2
-        u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4], u_inner[5])
-    end
+	## get the appropriate normal vector from the orientation
+	if orientation == 1
+		u_boundary = SVector(u_inner[1], -u_inner[2], u_inner[3], u_inner[4], u_inner[5])
+	else # orientation == 2
+		u_boundary = SVector(u_inner[1], u_inner[2], -u_inner[3], u_inner[4], u_inner[5])
+	end
 
-    # Calculate boundary flux
-    if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
-        flux = surface_flux_function(u_inner, u_boundary, orientation, equations)
-        noncons_flux = nonconservative_flux_function(u_inner, u_boundary, orientation,
-                                                     equations)
-    else # u_boundary is "left" of boundary, u_inner is "right" of boundary
-        flux = surface_flux_function(u_boundary, u_inner, orientation, equations)
-        noncons_flux = nonconservative_flux_function(u_boundary, u_inner, orientation,
-                                                     equations)
-    end
+	# Calculate boundary flux
+	if iseven(direction) # u_inner is "left" of boundary, u_boundary is "right" of boundary
+		flux = surface_flux_function(u_inner, u_boundary, orientation, equations)
+		noncons_flux = nonconservative_flux_function(u_inner, u_boundary, orientation,
+			equations)
+	else # u_boundary is "left" of boundary, u_inner is "right" of boundary
+		flux = surface_flux_function(u_boundary, u_inner, orientation, equations)
+		noncons_flux = nonconservative_flux_function(u_boundary, u_inner, orientation,
+			equations)
+	end
 
-    return flux, noncons_flux
+	return flux, noncons_flux
 end
 
 @inline function flux_surface_cons(u_ll, u_rr, normal_direction::AbstractVector,
@@ -154,8 +154,8 @@ end
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
-    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
 	f2 = kin_avg * 0.5f0 * normal_direction[1]
 	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
@@ -182,13 +182,13 @@ end
 	# kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
 	# v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	# v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-	
+
 	jump_v1 = v1_rr - v1_ll
 	jump_v2 = v2_rr - v1_ll
 
-    f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2]
+	f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] - v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] - v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2]
 	f4 = 0.0
 	return SVector(f1, f2, f3, f4, 0)
 end
@@ -207,19 +207,19 @@ end
 	kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-	
-	 rho_v_rr = v1_ll * rho_ll * normal_direction[1] + v2_ll * rho_ll * normal_direction[2]
-	 rho_v_ll = v1_rr * rho_rr * normal_direction[1] + v2_rr * rho_rr * normal_direction[2]
-	c = 340.0
 
-	c_adv = 0.5 * abs((v_dot_n_ll + v_dot_n_rr))/norm(normal_direction)
-	# diss = c / (2 * rho_avg) * ( (rho_v_rr - rho_v_ll) * normal_direction[1] + (rho_v_rr - rho_v_ll) * normal_direction[2])
+	rho_v_rr = v1_ll * rho_ll * normal_direction[1] + v2_ll * rho_ll * normal_direction[2]
+	rho_v_ll = v1_rr * rho_rr * normal_direction[1] + v2_rr * rho_rr * normal_direction[2]
+	RealT = eltype(u_ll)
+	c = RealT(340.0)
+
+	c_adv = 0.5f0 * abs((v_dot_n_ll + v_dot_n_rr))/norm(normal_direction)
 	diss1 = c / (2 * rho_avg) * (rho_v_rr - rho_v_ll) * normal_direction[1] / norm(normal_direction)^2
 	diss2 = c / (2 * rho_avg) * (rho_v_rr - rho_v_ll) * normal_direction[2] / norm(normal_direction)^2
-    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-	f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 - 0.5 * c_adv/rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) * norm(normal_direction)	
-	f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 - 0.5 * c_adv/rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) * norm(normal_direction)
+	## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 - 0.5f0 * c_adv/rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) * norm(normal_direction)
+	f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 - 0.5f0 * c_adv/rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) * norm(normal_direction)
 
 	if f1 >= 0
 		f4 = f1 * theta_ll
@@ -249,19 +249,20 @@ end
 	# kin_avg = 0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
-	
+
 	jump_v1 = v1_rr - v1_ll
 	jump_v2 = v2_rr - v1_ll
 	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-	if f1 >= 0 
+	
+	if f1 >= 0
 		theta = theta_ll
 	else
 		theta = theta_rr
 	end
 
-    f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[2]
+	f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] - v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] - v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta * (exner_rr - exner_ll) * normal_direction[2]
 	f4 = 0.0
 	return SVector(f1, f2, f3, f4, 0)
 
@@ -282,8 +283,8 @@ end
 	v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2]
 	v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2]
 
-    ## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
-    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+	## According to Kieran notes I should use the average of the momentum in the density and potential temperature fluxes?
+	f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
 	f2 = kin_avg * 0.5f0 * normal_direction[1]
 	f3 = kin_avg * 0.5f0 * normal_direction[2]
 	f4 = f1 * theta_avg
@@ -301,14 +302,14 @@ end
 	rho_rr, v1_rr, v2_rr, exner_rr = cons2primexner(u_rr, equations)
 	theta_ll = rho_theta_ll/rho_ll
 	# Average each factor of products in flux
-	
+
 	jump_v1 = v1_rr - v1_ll
 	jump_v2 = v2_rr - v1_ll
 	phi_jump = phi_rr - phi_ll
-    f1 = 0.0
-	f2 = v2_ll * jump_v1 * normal_direction[2] -v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1] + equations.g * phi_jump * normal_direction[1]
-	f3 = v1_ll * jump_v2 * normal_direction[1] -v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2] + equations.g * phi_jump * normal_direction[2]
-#	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
+	f1 = 0.0
+	f2 = v2_ll * jump_v1 * normal_direction[2] - v2_ll * jump_v2 * normal_direction[1] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[1] + equations.g * phi_jump * normal_direction[1]
+	f3 = v1_ll * jump_v2 * normal_direction[1] - v1_ll * jump_v1 * normal_direction[2] + equations.c_p * theta_ll * (exner_rr - exner_ll) * normal_direction[2] + equations.g * phi_jump * normal_direction[2]
+	#	f4 = theta_ll * (rho_rr * v1_rr - rho_ll * v1_ll) * normal_direction[1] * 0.5 + rho_ll * v1_ll * (theta_rr - theta_ll) * normal_direction[1] *0.5 +  theta_ll * (rho_rr * v2_rr - rho_ll * v2_ll) * normal_direction[2] * 0.5 + rho_ll * v2_ll * (theta_rr - theta_ll) * normal_direction[2] * 0.5  
 	f4 = 0.0
 	return SVector(f1, f2, f3, f4, 0)
 end
@@ -444,7 +445,7 @@ end
 
 	rho, v1, v2, rho_theta, phi = u
 
-	exner =  (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
+	exner = (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
 	return SVector(rho, v1, v2, exner, phi)
 end
 
@@ -452,7 +453,7 @@ end
 
 	_, _, _, rho_theta = u
 
-	exner =  (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
+	exner = (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
 	return exner
 end
 

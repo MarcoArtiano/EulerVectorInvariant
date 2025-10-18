@@ -1,4 +1,5 @@
 [deps]
+DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
 Invariant = "efae7fc9-9666-493c-9303-7f849a978ebf"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 OrdinaryDiffEqLowStorageRK = "b0944070-b475-4768-8dec-fb6eb410534d"
