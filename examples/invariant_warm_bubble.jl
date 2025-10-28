@@ -41,7 +41,7 @@ function initial_condition_warm_bubble(x, t, equations::CompressibleEulerVectorI
 
 	v1 = 20.0
 	v2 = 0.0
-	return SVector(rho, v1, v2, rho * potential_temperature, x[2])
+	return SVector(rho, v1, v2, rho * potential_temperature, g * x[2])
 end
 
 ###############################################################################
@@ -82,8 +82,15 @@ basis = LobattoLegendreBasis(polydeg)
 	return SVector(f1, f2, f3, f4, 0)
 end
 
+function flux_zero_n(u_ll, u_rr, normal_or_orientation, equations)
+	return zero(u_ll) ,zero(u_rr)
+end
+
 surface_flux = (flux_surface_cons_upwind, flux_surface_noncons_upwind)
 volume_flux = (flux_volume_cons, flux_volume_noncons)
+surface_flux = (flux_surface_total, flux_zero)
+volume_flux = (flux_invariant_turbo, flux_zero)
+
 volume_integral = VolumeIntegralFluxDifferencing(volume_flux)
 solver = DGSEM(basis, surface_flux, volume_integral)
 
@@ -106,7 +113,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition_warm_bubb
 ###############################################################################
 # ODE solvers, callbacks etc.
 dt = 1.0e-3
-tspan = (0.0, 1000)
+tspan = (0.0, dt)
 ode = semidiscretize(semi, tspan)
 
 summary_callback = SummaryCallback()
@@ -124,8 +131,8 @@ callbacks = CallbackSet(summary_callback,
 ###############################################################################
 # run the simulation
 sol = solve(ode,
-	SSPRK43();
+	Euler();
 	maxiters = 1.0e7,
-	dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-	ode_default_options()..., callback = callbacks);
+	dt = dt, # solve needs some value here but it will be overwritten by the stepsize_callback
+	ode_default_options()..., callback = callbacks, adaptive = false);
 
