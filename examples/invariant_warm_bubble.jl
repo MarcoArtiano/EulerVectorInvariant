@@ -83,7 +83,7 @@ basis = LobattoLegendreBasis(polydeg)
 end
 
 surface_flux = (flux_surface_cons_upwind, flux_surface_noncons_upwind)
-volume_flux = (flux_volume_cons, flux_volume_wb)
+volume_flux = (flux_volume_cons, flux_volume_noncons)
 volume_integral = VolumeIntegralFluxDifferencing(volume_flux)
 solver = DGSEM(basis, surface_flux, volume_integral)
 
