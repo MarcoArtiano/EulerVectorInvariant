@@ -80,10 +80,12 @@ warm_bubble_setup = WarmBubbleSetup()
 
 equations = CompressibleEulerEquations2D(warm_bubble_setup.gamma)
 
-boundary_conditions = (x_neg = boundary_condition_periodic,
-                       x_pos = boundary_condition_periodic,
-                       y_neg = boundary_condition_slip_wall,
-                       y_pos = boundary_condition_slip_wall)
+boundary_conditions = (
+    x_neg = boundary_condition_periodic,
+    x_pos = boundary_condition_periodic,
+    y_neg = boundary_condition_slip_wall,
+    y_pos = boundary_condition_slip_wall,
+)
 
 polydeg = 3
 basis = LobattoLegendreBasis(polydeg)
@@ -100,13 +102,22 @@ solver = DGSEM(basis, surface_flux, volume_integral)
 coordinates_min = (0.0, 0.0)
 coordinates_max = (20_000.0, 10_000.0)
 
-cells_per_dimension = (64, 32)
-mesh = StructuredMesh(cells_per_dimension, coordinates_min, coordinates_max,
-                      periodicity = (true, false))
+cells_per_dimension = (32, 16)
+mesh = StructuredMesh(
+    cells_per_dimension,
+    coordinates_min,
+    coordinates_max,
+    periodicity = (true, false),
+)
 
-semi = SemidiscretizationHyperbolic(mesh, equations, warm_bubble_setup, solver,
-                                    source_terms = warm_bubble_setup,
-                                    boundary_conditions = boundary_conditions)
+semi = SemidiscretizationHyperbolic(
+    mesh,
+    equations,
+    warm_bubble_setup,
+    solver,
+    source_terms = warm_bubble_setup,
+    boundary_conditions = boundary_conditions,
+)
 
 ###############################################################################
 # ODE solvers, callbacks etc.
@@ -119,21 +130,23 @@ summary_callback = SummaryCallback()
 
 analysis_interval = 1000
 
-analysis_callback = AnalysisCallback(semi, interval = analysis_interval,
-                                     extra_analysis_errors = (:entropy_conservation_error,))
+analysis_callback = AnalysisCallback(
+    semi,
+    interval = analysis_interval,
+    extra_analysis_errors = (:entropy_conservation_error,),
+)
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 
-stepsize_callback = StepsizeCallback(cfl = 1.0)
-
-callbacks = CallbackSet(summary_callback,
-                        analysis_callback,
-                        alive_callback,
-                        stepsize_callback)
+callbacks =
+    CallbackSet(summary_callback, analysis_callback, alive_callback)
 
 ###############################################################################
 # run the simulation
-sol = solve(ode, CarpenterKennedy2N54(williamson_condition = false);
-            maxiters = 1.0e7,
-            dt = 1.0, # solve needs some value here but it will be overwritten by the stepsize_callback
-            ode_default_options()..., callback = callbacks);
+sol = solve(
+    ode,
+    SSPRK43();
+    maxiters = 1.0e7,
+    ode_default_options()...,
+    callback = callbacks,
+);
