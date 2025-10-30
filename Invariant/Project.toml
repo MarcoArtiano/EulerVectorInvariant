@@ -4,7 +4,9 @@ authors = ["Marco Artiano <artianomarco97@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Trixi = "a7f1ee26-1774-49b1-8366-f1abc58fbfcb"
 
 [compat]
+InteractiveUtils = "1.11.0"
 Trixi = "0.13.1"

@@ -1,9 +1,29 @@
 using Trixi
-using Trixi: True, get_contravariant_vector, multiply_add_to_node_vars!, @threaded, get_surface_node_vars, get_normal_direction, get_node_coords, @turbo, PtrArray, StrideArray
+using Trixi:
+	True,
+	get_contravariant_vector,
+	multiply_add_to_node_vars!,
+	@threaded,
+	get_surface_node_vars,
+	get_normal_direction,
+	get_node_coords,
+	@turbo,
+	PtrArray,
+	StrideArray
 using Trixi: StaticInt, indices
 @muladd begin
 
-	 @inline function Trixi.flux_differencing_kernel!( du, u, element, mesh::Union{StructuredMesh{2}, StructuredMeshView{2}, UnstructuredMesh2D, P4estMesh{2}, T8codeMesh{2}},
+	@inline function Trixi.flux_differencing_kernel!(
+		du,
+		u,
+		element,
+		mesh::Union{
+			StructuredMesh{2},
+			StructuredMeshView{2},
+			UnstructuredMesh2D,
+			P4estMesh{2},
+			T8codeMesh{2},
+		},
 		nonconservative_terms::True,
 		equations::CompressibleEulerVectorInvariantEquations2D,
 		volume_flux,
@@ -15,11 +35,21 @@ using Trixi: StaticInt, indices
 		@unpack contravariant_vectors = cache.elements
 		symmetric_flux, nonconservative_flux = volume_flux
 
-		Trixi.flux_differencing_kernel!(du, u, element, mesh, True(), equations, symmetric_flux, dg, cache, alpha, )
+		flux_differencing_kernel!(
+			du,
+			u,
+			element,
+			mesh,
+			True(),
+			equations,
+			symmetric_flux,
+			dg,
+			cache,
+			alpha)
 
 		#Trixi.flux_differencing_kernel!(du, u, element, mesh, Trixi.True(), equations, volume_flux, dg, cache, alpha)
 		return nothing
-	end  
+	end
 
 	# Inlined version of the interface flux computation for equations with conservative and nonconservative terms
 	@inline function Trixi.calc_interface_flux!(
@@ -42,7 +72,8 @@ using Trixi: StaticInt, indices
 		@unpack u = cache.interfaces
 		surface_flux, nonconservative_flux = surface_integral.surface_flux
 
-		u_ll, u_rr = get_surface_node_vars(u, equations, dg, primary_node_index, interface_index)
+		u_ll, u_rr =
+			get_surface_node_vars(u, equations, dg, primary_node_index, interface_index)
 
 		flux_left, flux_right = surface_flux(u_ll, u_rr, normal_direction, equations)
 
@@ -147,7 +178,7 @@ using Trixi: StaticInt, indices
 
 end
 
-@inline function Trixi.flux_differencing_kernel!(
+@inline function flux_differencing_kernel!(
 	_du::PtrArray,
 	u_cons::PtrArray,
 	element,
@@ -157,220 +188,241 @@ end
 	volume_flux::typeof(flux_invariant_turbo),
 	dg::DGSEM,
 	cache,
-	alpha,
-)
+	alpha)
 
 	@unpack derivative_split = dg.basis
 	@unpack contravariant_vectors = cache.elements
-    # Create a temporary array that will be used to store the RHS with permuted
-    # indices `[i, j, v]` to allow using SIMD instructions.
-    # `StrideArray`s with purely static dimensions do not allocate on the heap.
-    du = StrideArray{eltype(u_cons)}(undef,
-                                     (ntuple(_ -> StaticInt(nnodes(dg)), ndims(mesh))...,
-                                      StaticInt(nvariables(equations))))
+	# Create a temporary array that will be used to store the RHS with permuted
+	# indices `[i, j, v]` to allow using SIMD instructions.
+	# `StrideArray`s with purely static dimensions do not allocate on the heap.
+	du = StrideArray{eltype(u_cons)}(
+		undef,
+		(
+			ntuple(_ -> StaticInt(nnodes(dg)), ndims(mesh))...,
+			StaticInt(nvariables(equations)),
+		),
+	)
 
-    # Convert conserved to primitive variables on the given `element`. In addition
-    # to the usual primitive variables, we also compute logarithms of the density
-    # and pressure to increase the performance of the required logarithmic mean
-    # values.
-    u_prim = StrideArray{eltype(u_cons)}(undef,
-                                         (ntuple(_ -> StaticInt(nnodes(dg)),
-                                                 ndims(mesh))...,
-                                          StaticInt(nvariables(equations) + 2))) # We also compute "+ 2" logs
+	# Convert conserved to primitive variables on the given `element`. In addition
+	# to the usual primitive variables, we also compute logarithms of the density
+	# and pressure to increase the performance of the required logarithmic mean
+	# values.
+	u_prim = StrideArray{eltype(u_cons)}(
+		undef,
+		(
+			ntuple(_ -> StaticInt(nnodes(dg)), ndims(mesh))...,
+			StaticInt(nvariables(equations) + 2),
+		),
+	) # We also compute "+ 2" logs
 
-    @turbo for j in eachnode(dg), i in eachnode(dg)
-        rho = u_cons[1, i, j, element]
-        v1 = u_cons[2, i, j, element]
-        v2 = u_cons[3, i, j, element]
-        rho_theta = u_cons[4, i, j, element]
-        phi = u_cons[5, i, j, element]
+	@turbo for j in eachnode(dg), i in eachnode(dg)
+		rho = u_cons[1, i, j, element]
+		v1 = u_cons[2, i, j, element]
+		v2 = u_cons[3, i, j, element]
+		rho_theta = u_cons[4, i, j, element]
+		phi = u_cons[5, i, j, element]
 
-       exner = (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
-	theta = rho_theta/rho
-        u_prim[i, j, 1] = rho
-        u_prim[i, j, 2] = v1
-        u_prim[i, j, 3] = v2
-        u_prim[i, j, 4] = theta
-        u_prim[i, j, 5] = exner
-        u_prim[i, j, 6] = phi
-    end
+		exner = (rho_theta * equations.R / equations.p_0)^(equations.R / equations.c_v)
+		theta = rho_theta / rho
+		u_prim[i, j, 1] = rho
+		u_prim[i, j, 2] = v1
+		u_prim[i, j, 3] = v2
+		u_prim[i, j, 4] = theta
+		u_prim[i, j, 5] = exner
+		u_prim[i, j, 6] = phi
+	end
 
-    # x direction
-    # At first, we create new temporary arrays with permuted memory layout to
-    # allow using SIMD instructions along the first dimension (which is contiguous
-    # in memory).
-    du_permuted = StrideArray{eltype(u_cons)}(undef,
-                                              (StaticInt(nnodes(dg)), StaticInt(nnodes(dg)),
-                                               StaticInt(nvariables(equations))))
+	# x direction
+	# At first, we create new temporary arrays with permuted memory layout to
+	# allow using SIMD instructions along the first dimension (which is contiguous
+	# in memory).
+	du_permuted = StrideArray{eltype(u_cons)}(
+		undef,
+		(StaticInt(nnodes(dg)), StaticInt(nnodes(dg)), StaticInt(nvariables(equations))),
+	)
 
-    u_prim_permuted = StrideArray{eltype(u_cons)}(undef,
-                                                  (StaticInt(nnodes(dg)),
-                                                   StaticInt(nnodes(dg)),
-                                                   StaticInt(nvariables(equations) + 2)))
+	u_prim_permuted = StrideArray{eltype(u_cons)}(
+		undef,
+		(
+			StaticInt(nnodes(dg)),
+			StaticInt(nnodes(dg)),
+			StaticInt(nvariables(equations) + 2),
+		),
+	)
 
-    @turbo for v in indices(u_prim, 3), # v in eachvariable(equations) misses +2 logs
-               j in eachnode(dg),
-               i in eachnode(dg)
+	@turbo for v in indices(u_prim, 3), # v in eachvariable(equations) misses +2 logs
+		j in eachnode(dg),
+		i in eachnode(dg)
 
-        u_prim_permuted[j, i, v] = u_prim[i, j, v]
-    end
-    fill!(du_permuted, zero(eltype(du_permuted)))
+		u_prim_permuted[j, i, v] = u_prim[i, j, v]
+	end
+	fill!(du_permuted, zero(eltype(du_permuted)))
 
-    # We must also permute the contravariant vectors.
-    contravariant_vectors_x = StrideArray{eltype(contravariant_vectors)}(undef,
-                                                                         (StaticInt(nnodes(dg)),
-                                                                          StaticInt(nnodes(dg)),
-                                                                          StaticInt(ndims(mesh))))
+	# We must also permute the contravariant vectors.
+	contravariant_vectors_x = StrideArray{eltype(contravariant_vectors)}(
+		undef,
+		(StaticInt(nnodes(dg)), StaticInt(nnodes(dg)), StaticInt(ndims(mesh))),
+	)
 
-    @turbo for j in eachnode(dg), i in eachnode(dg)
-        contravariant_vectors_x[j, i, 1] = contravariant_vectors[1, 1, i, j, element]
-        contravariant_vectors_x[j, i, 2] = contravariant_vectors[2, 1, i, j, element]
-    end
+	@turbo for j in eachnode(dg), i in eachnode(dg)
+		contravariant_vectors_x[j, i, 1] = contravariant_vectors[1, 1, i, j, element]
+		contravariant_vectors_x[j, i, 2] = contravariant_vectors[2, 1, i, j, element]
+	end
 
-    # Next, we basically inline the volume flux. To allow SIMD vectorization and
-    # still use the symmetry of the volume flux and the derivative matrix, we
-    # loop over the triangular part in an outer loop and use a plain inner loop.
-    for i in eachnode(dg), ii in (i + 1):nnodes(dg)
-        @turbo for j in eachnode(dg)
-            rho_ll = u_prim_permuted[j, i, 1]
-            v1_ll = u_prim_permuted[j, i, 2]
-            v2_ll = u_prim_permuted[j, i, 3]
-            theta_ll = u_prim_permuted[j, i, 4]
-            exner_ll = u_prim_permuted[j, i, 5]
-            phi_ll = u_prim_permuted[j, i, 6]
+	# Next, we basically inline the volume flux. To allow SIMD vectorization and
+	# still use the symmetry of the volume flux and the derivative matrix, we
+	# loop over the triangular part in an outer loop and use a plain inner loop.
+	for i in eachnode(dg), ii ∈ (i+1):nnodes(dg)
+		@turbo for j in eachnode(dg)
+			rho_ll = u_prim_permuted[j, i, 1]
+			v1_ll = u_prim_permuted[j, i, 2]
+			v2_ll = u_prim_permuted[j, i, 3]
+			theta_ll = u_prim_permuted[j, i, 4]
+			exner_ll = u_prim_permuted[j, i, 5]
+			phi_ll = u_prim_permuted[j, i, 6]
 
-            rho_rr = u_prim_permuted[j, ii, 1]
-            v1_rr = u_prim_permuted[j, ii, 2]
-            v2_rr = u_prim_permuted[j, ii, 3]
-            theta_rr = u_prim_permuted[j, ii, 4]
-            exner_rr = u_prim_permuted[j, ii, 5]
-            phi_rr = u_prim_permuted[j, ii, 6]
+			rho_rr = u_prim_permuted[j, ii, 1]
+			v1_rr = u_prim_permuted[j, ii, 2]
+			v2_rr = u_prim_permuted[j, ii, 3]
+			theta_rr = u_prim_permuted[j, ii, 4]
+			exner_rr = u_prim_permuted[j, ii, 5]
+			phi_rr = u_prim_permuted[j, ii, 6]
 
-            normal_direction_1 = 0.5 * (contravariant_vectors_x[j, i, 1] +
-                                  contravariant_vectors_x[j, ii, 1])
-            normal_direction_2 = 0.5 * (contravariant_vectors_x[j, i, 2] +
-                                  contravariant_vectors_x[j, ii, 2])
+			normal_direction_1 =
+				0.5f0 *
+				(contravariant_vectors_x[j, i, 1] + contravariant_vectors_x[j, ii, 1])
+			normal_direction_2 =
+				0.5f0 *
+				(contravariant_vectors_x[j, i, 2] + contravariant_vectors_x[j, ii, 2])
 
-            v_dot_n_ll = v1_ll * normal_direction_1 + v2_ll * normal_direction_2
-            v_dot_n_rr = v1_rr * normal_direction_1 + v2_rr * normal_direction_2
-			v1_avg = 0.5 * (v1_ll + v1_rr)
-			v2_avg = 0.5 * (v2_ll + v2_rr)
-	
-			kin_avg = 0.5 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
-			rho_avg = 0.5 * (rho_ll + rho_rr)
-			theta_avg = 0.5 * (theta_rr + theta_ll)
-			f1 = rho_avg * 0.5 * (v_dot_n_ll + v_dot_n_rr)
-			f2 = kin_avg * 0.5 * normal_direction_1
-			f3 = kin_avg * 0.5 * normal_direction_2
+			v_dot_n_ll = v1_ll * normal_direction_1 + v2_ll * normal_direction_2
+			v_dot_n_rr = v1_rr * normal_direction_1 + v2_rr * normal_direction_2
+			v1_avg = 0.5f0 * (v1_ll + v1_rr)
+			v2_avg = 0.5f0 * (v2_ll + v2_rr)
+
+			kin_avg =
+				0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+			rho_avg = 0.5f0 * (rho_ll + rho_rr)
+			theta_avg = 0.5f0 * (theta_rr + theta_ll)
+			f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+			f2 = kin_avg * 0.5f0 * normal_direction_1
+			f3 = kin_avg * 0.5f0 * normal_direction_2
 			f4 = f1 * theta_avg
 
 			jump_v1 = v1_rr - v1_ll
 			jump_v2 = v2_rr - v2_ll
 			gravity = phi_rr - phi_ll
-			vorticity_x = v2_avg * jump_v1 * normal_direction_2 - v2_avg * jump_v2 * normal_direction_1
-			vorticity_y = v1_avg * jump_v2 * normal_direction_1 - v1_avg * jump_v1 * normal_direction_2 
+			vorticity_x =
+				v2_avg * jump_v1 * normal_direction_2 -
+				v2_avg * jump_v2 * normal_direction_1
+			vorticity_y =
+				v1_avg * jump_v2 * normal_direction_1 -
+				v1_avg * jump_v1 * normal_direction_2
 			theta_grad_exner = equations.c_p * theta_avg * (exner_rr - exner_ll)
-			g2 = vorticity_x + (theta_grad_exner + gravity) * normal_direction_1	
+			g2 = vorticity_x + (theta_grad_exner + gravity) * normal_direction_1
 			g3 = vorticity_y + (theta_grad_exner + gravity) * normal_direction_2
 
-            # Add scaled fluxes to RHS
-            factor_i = alpha * derivative_split[i, ii]
-            du_permuted[j, i, 1] += factor_i * f1
-	    du_permuted[j, i, 2] += factor_i * (f2 + 0.5 * g2)
-	    du_permuted[j, i, 3] += factor_i * (f3 + 0.5*g3)
-            du_permuted[j, i, 4] += factor_i * f4
+			# Add scaled fluxes to RHS
+			factor_i = alpha * derivative_split[i, ii]
+			du_permuted[j, i, 1] += factor_i * f1
+			du_permuted[j, i, 2] += factor_i * (f2 + 0.5f0 * g2)
+			du_permuted[j, i, 3] += factor_i * (f3 + 0.5f0 * g3)
+			du_permuted[j, i, 4] += factor_i * f4
 
-            factor_ii = alpha * derivative_split[ii, i]
-            du_permuted[j, ii, 1] += factor_ii * f1
-	    du_permuted[j, ii, 2] += factor_ii * (f2 - 0.5*g2)
-	    du_permuted[j, ii, 3] += factor_ii * (f3 - 0.5*g3)
-            du_permuted[j, ii, 4] += factor_ii * f4
-        end
-    end
+			factor_ii = alpha * derivative_split[ii, i]
+			du_permuted[j, ii, 1] += factor_ii * f1
+			du_permuted[j, ii, 2] += factor_ii * (f2 - 0.5f0 * g2)
+			du_permuted[j, ii, 3] += factor_ii * (f3 - 0.5f0 * g3)
+			du_permuted[j, ii, 4] += factor_ii * f4
+		end
+	end
 
-    @turbo for v in eachvariable(equations),
-               j in eachnode(dg),
-               i in eachnode(dg)
+	@turbo for v in eachvariable(equations), j in eachnode(dg), i in eachnode(dg)
 
-        du[i, j, v] = du_permuted[j, i, v]
-    end
+		du[i, j, v] = du_permuted[j, i, v]
+	end
 
-    # y direction
-    # We must also permute the contravariant vectors.
-    contravariant_vectors_y = StrideArray{eltype(contravariant_vectors)}(undef,
-                                                                         (StaticInt(nnodes(dg)),
-                                                                          StaticInt(nnodes(dg)),
-                                                                          StaticInt(ndims(mesh))))
+	# y direction
+	# We must also permute the contravariant vectors.
+	contravariant_vectors_y = StrideArray{eltype(contravariant_vectors)}(
+		undef,
+		(StaticInt(nnodes(dg)), StaticInt(nnodes(dg)), StaticInt(ndims(mesh))),
+	)
 
-    @turbo for k in eachnode(dg), j in eachnode(dg), i in eachnode(dg)
-        contravariant_vectors_y[i, j, 1] = contravariant_vectors[1, 2, i, j, element]
-        contravariant_vectors_y[i, j, 2] = contravariant_vectors[2, 2, i, j, element]
-    end
+	@turbo for k in eachnode(dg), j in eachnode(dg), i in eachnode(dg)
+		contravariant_vectors_y[i, j, 1] = contravariant_vectors[1, 2, i, j, element]
+		contravariant_vectors_y[i, j, 2] = contravariant_vectors[2, 2, i, j, element]
+	end
 
-    # The memory layout is already optimal for SIMD vectorization in this loop.
-    for j in eachnode(dg), jj in (j + 1):nnodes(dg)
-        @turbo for i in eachnode(dg)
-            rho_ll = u_prim[i, j, 1]
-            v1_ll = u_prim[i, j, 2]
-            v2_ll = u_prim[i, j, 3]
-            theta_ll = u_prim[i, j, 4]
-            exner_ll = u_prim[i, j, 5]
-            phi_ll = u_prim[i, j, 6]
+	# The memory layout is already optimal for SIMD vectorization in this loop.
+	for j in eachnode(dg), jj ∈ (j+1):nnodes(dg)
+		@turbo for i in eachnode(dg)
+			rho_ll = u_prim[i, j, 1]
+			v1_ll = u_prim[i, j, 2]
+			v2_ll = u_prim[i, j, 3]
+			theta_ll = u_prim[i, j, 4]
+			exner_ll = u_prim[i, j, 5]
+			phi_ll = u_prim[i, j, 6]
 
-            rho_rr = u_prim[i, jj, 1]
-            v1_rr = u_prim[i, jj, 2]
-            v2_rr = u_prim[i, jj, 3]
-            theta_rr = u_prim[i, jj, 4]
-            exner_rr = u_prim[i, jj, 5]
-            phi_rr = u_prim[i, jj, 6]
+			rho_rr = u_prim[i, jj, 1]
+			v1_rr = u_prim[i, jj, 2]
+			v2_rr = u_prim[i, jj, 3]
+			theta_rr = u_prim[i, jj, 4]
+			exner_rr = u_prim[i, jj, 5]
+			phi_rr = u_prim[i, jj, 6]
 
-            normal_direction_1 = 0.5 * (contravariant_vectors_y[i, j, 1] +
-                                  contravariant_vectors_y[i, jj, 1])
-            normal_direction_2 = 0.5 * (contravariant_vectors_y[i, j, 2] +
-                                  contravariant_vectors_y[i, jj, 2])
+			normal_direction_1 =
+				0.5f0 *
+				(contravariant_vectors_y[i, j, 1] + contravariant_vectors_y[i, jj, 1])
+			normal_direction_2 =
+				0.5f0 *
+				(contravariant_vectors_y[i, j, 2] + contravariant_vectors_y[i, jj, 2])
 
-            v_dot_n_ll = v1_ll * normal_direction_1 + v2_ll * normal_direction_2
-            v_dot_n_rr = v1_rr * normal_direction_1 + v2_rr * normal_direction_2
+			v_dot_n_ll = v1_ll * normal_direction_1 + v2_ll * normal_direction_2
+			v_dot_n_rr = v1_rr * normal_direction_1 + v2_rr * normal_direction_2
 
-			v1_avg = 0.5 * (v1_ll + v1_rr)
-			v2_avg = 0.5 * (v2_ll + v2_rr)
-			kin_avg = 0.5 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
-			rho_avg = 0.5 * (rho_ll + rho_rr)
-			theta_avg = 0.5 * (theta_rr + theta_ll)
-			f1 = rho_avg * 0.5 * (v_dot_n_ll + v_dot_n_rr)
-			f2 = kin_avg * 0.5 * normal_direction_1
-			f3 = kin_avg * 0.5 * normal_direction_2
+			v1_avg = 0.5f0 * (v1_ll + v1_rr)
+			v2_avg = 0.5f0 * (v2_ll + v2_rr)
+			kin_avg =
+				0.5f0 * (v1_rr * v1_rr + v2_rr * v2_rr + v1_ll * v1_ll + v2_ll * v2_ll)
+			rho_avg = 0.5f0 * (rho_ll + rho_rr)
+			theta_avg = 0.5f0 * (theta_rr + theta_ll)
+			f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
+			f2 = kin_avg * 0.5f0 * normal_direction_1
+			f3 = kin_avg * 0.5f0 * normal_direction_2
 			f4 = f1 * theta_avg
 
 			jump_v1 = v1_rr - v1_ll
 			jump_v2 = v2_rr - v2_ll
 			gravity = phi_rr - phi_ll
-			vorticity_x = v2_avg * jump_v1 * normal_direction_2 - v2_avg * jump_v2 * normal_direction_1
-			vorticity_y = v1_avg * jump_v2 * normal_direction_1 - v1_avg * jump_v1 * normal_direction_2 
+			vorticity_x =
+				v2_avg * jump_v1 * normal_direction_2 -
+				v2_avg * jump_v2 * normal_direction_1
+			vorticity_y =
+				v1_avg * jump_v2 * normal_direction_1 -
+				v1_avg * jump_v1 * normal_direction_2
 			theta_grad_exner = equations.c_p * theta_avg * (exner_rr - exner_ll)
-			g2 = vorticity_x + (theta_grad_exner + gravity) * normal_direction_1	
+			g2 = vorticity_x + (theta_grad_exner + gravity) * normal_direction_1
 			g3 = vorticity_y + (theta_grad_exner + gravity) * normal_direction_2
-            # Add scaled fluxes to RHS
-            factor_j = alpha * derivative_split[j, jj]
-            du[i, j, 1] += factor_j * f1
-	    du[i, j, 2] += factor_j * (f2 + 0.5*g2)
-	    du[i, j, 3] += factor_j * (f3 + 0.5*g3)
-            du[i, j, 4] += factor_j * f4
+			# Add scaled fluxes to RHS
+			factor_j = alpha * derivative_split[j, jj]
+			du[i, j, 1] += factor_j * f1
+			du[i, j, 2] += factor_j * (f2 + 0.5f0 * g2)
+			du[i, j, 3] += factor_j * (f3 + 0.5f0 * g3)
+			du[i, j, 4] += factor_j * f4
 
-            factor_jj = alpha * derivative_split[jj, j]
-            du[i, jj, 1] += factor_jj * f1
-	    du[i, jj, 2] += factor_jj * (f2 - 0.5*g2)
-	    du[i, jj, 3] += factor_jj * (f3 - 0.5*g3)
-            du[i, jj, 4] += factor_jj * f4
-        end
-    end
+			factor_jj = alpha * derivative_split[jj, j]
+			du[i, jj, 1] += factor_jj * f1
+			du[i, jj, 2] += factor_jj * (f2 - 0.5f0 * g2)
+			du[i, jj, 3] += factor_jj * (f3 - 0.5f0 * g3)
+			du[i, jj, 4] += factor_jj * f4
+		end
+	end
 
-    # Finally, we add the temporary RHS computed here to the global RHS in the
-    # given `element`.
-    @turbo for v in eachvariable(equations),
-               j in eachnode(dg),
-               i in eachnode(dg)
+	# Finally, we add the temporary RHS computed here to the global RHS in the
+	# given `element`.
+	@turbo for v in eachvariable(equations), j in eachnode(dg), i in eachnode(dg)
 
-        _du[v, i, j, element] += du[i, j, v]
-    end
+		_du[v, i, j, element] += du[i, j, v]
+	end
 end

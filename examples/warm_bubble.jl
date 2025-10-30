@@ -138,15 +138,9 @@ analysis_callback = AnalysisCallback(
 
 alive_callback = AliveCallback(analysis_interval = analysis_interval)
 
-callbacks =
-    CallbackSet(summary_callback, analysis_callback, alive_callback)
+callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback)
 
 ###############################################################################
 # run the simulation
-sol = solve(
-    ode,
-    SSPRK43();
-    maxiters = 1.0e7,
-    ode_default_options()...,
-    callback = callbacks,
-);
+sol =
+    solve(ode, SSPRK43(); maxiters = 1.0e7, ode_default_options()..., callback = callbacks);

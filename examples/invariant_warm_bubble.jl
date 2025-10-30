@@ -2,7 +2,7 @@ using OrdinaryDiffEqLowStorageRK
 using Invariant
 using Invariant.Trixi
 using Plots
-using OrdinaryDiffEq
+using OrdinaryDiffEqSSPRK
 
 # Initial condition
 function initial_condition_warm_bubble(
@@ -50,7 +50,7 @@ end
 
 ###############################################################################
 # semidiscretization of the compressible Euler equations
-equations = CompressibleEulerVectorInvariantEquations2D()
+equations = CompressibleEulerVectorInvariantEquations2D(c_p = 1007, c_v = 717, gravity = 9.81)
 
 boundary_conditions =
     Dict(:y_neg => boundary_condition_slip_wall, :y_pos => boundary_condition_slip_wall)
@@ -102,7 +102,7 @@ end
 
 #surface_flux = (flux_surface_cons_upwind, flux_surface_noncons_upwind)
 #surface_flux = (flux_surface_total_upwind, flux_zero)
-surface_flux = (flux_surface_total_upwind, flux_zero)
+surface_flux = (flux_energy_stable, flux_zero)
 volume_flux = (flux_invariant_turbo, flux_zero)
 #volume_flux = (flux_volume_cons, flux_volume_noncons)
 #volume_flux = (flux_zero, flux_zero)
@@ -153,10 +153,5 @@ callbacks = CallbackSet(summary_callback, analysis_callback, alive_callback)
 
 ###############################################################################
 # run the simulation
-sol = solve(
-    ode,
-    SSPRK43();
-    maxiters = 1.0e7,
-    ode_default_options()...,
-    callback = callbacks,
-);
+sol =
+    solve(ode, SSPRK43(); maxiters = 1.0e7, ode_default_options()..., callback = callbacks);
