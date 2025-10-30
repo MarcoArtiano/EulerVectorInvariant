@@ -1,0 +1,32 @@
+# Use SciML style: https://github.com/SciML/SciMLStyle
+style = "sciml"
+
+# Python style alignment. See https://github.com/domluna/JuliaFormatter.jl/pull/732.
+yas_style_nesting = true
+
+# Align struct fields for better readability of large struct definitions
+align_struct_field = false
+
+always_for_in = false
+short_to_long_function_def = false
+always_use_return = false
+whitespace_typedefs = false
+whitespace_ops_in_indices = true
+remove_extra_newlines = true
+pipe_to_function_call = false
+short_circuit_to_if = false
+always_use_return = false
+whitespace_in_kwargs = true
+annotate_untyped_fields_with_any = false
+format_docstrings = false
+align_struct_field = false
+align_conditional = false
+align_assignment = false
+align_pair_arrow = false
+conditional_to_if = false
+normalize_line_endings = "unix"
+trailing_comma = false
+trailing_zero = true
+join_lines_based_on_source = true  # Mantiene linee se erano già inline
+indent = 4
+margin = 92  # Aumenta questo per permettere linee più lunghe prima di andare a capo
