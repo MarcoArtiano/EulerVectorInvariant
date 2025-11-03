@@ -243,4 +243,4 @@ sol = solve(ode,
             abstol = tol, reltol = tol, ode_default_options()...,
             callback = callbacks)
 
- contour_baroclinic(sol, semi, sol, semi, trees_per_cube_face, 2* (polydeg+  1), equations, equations)
+contour_baroclinic(sol, semi, sol, semi, trees_per_cube_face, 2 * (polydeg+  1), equations, equations)

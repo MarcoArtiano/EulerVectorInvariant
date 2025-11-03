@@ -178,15 +178,14 @@ end
     f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 -0.5f0 * c_adv / rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) *norm(normal_direction)
     f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 -0.5f0 * c_adv / rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) *norm(normal_direction)
     f4 = kin_avg * 0.5f0 * normal_direction[3] - diss3 -0.5f0 * c_adv / rho_avg * (rho_rr * v3_rr - rho_ll * v3_ll) *norm(normal_direction)
-
+    # a partial_x b = partial_x ( ab) - b partial_x a  = > c_p theta grad exner = grad ( exner theta) - exner grad theta 
+		# a partial_x b = (flux(a) jump(b) | i + 1/2 + flux(a) jump(b) |i -1/2)/ (2 Delta x)
     if f1 >= 0
         f5 = f1 * theta_ll
-			theta_avg = theta_ll
     else
         f5 = f1 * theta_rr
-			theta_avg = theta_rr
     end
-    theta_grad_exner =  equations.c_p * theta_avg * (exner_rr - exner_ll)    
+    theta_grad_exner =  equations.c_p * theta_avg * (exner_rr - exner_ll)  # inv_ln_mean(1/theta_ll, 1/theta_rr)    
     vorticity_x = v2_avg * (jump_v1 * normal_direction[2] - jump_v2 * normal_direction[1]) + v3_avg * (jump_v1 * normal_direction[3] - jump_v3 * normal_direction[1])
     vorticity_y = v1_avg * (jump_v2 * normal_direction[1] - jump_v1 * normal_direction[2]) + v3_avg * (jump_v2 * normal_direction[3] - jump_v3 * normal_direction[2])
     vorticity_z = v1_avg * (jump_v3 * normal_direction[1] - jump_v1 * normal_direction[3]) + v2_avg * (jump_v3 * normal_direction[2] - jump_v2 * normal_direction[3]) 

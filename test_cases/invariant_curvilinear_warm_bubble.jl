@@ -81,7 +81,7 @@ basis = LobattoLegendreBasis(polydeg)
     jump_v2 = v2_rr - v1_ll
     phi_jump = phi_rr - phi_ll
     theta_avg = (theta_ll + theta_rr) * 0.5f0
-    theta_avg = Trixi.inv_ln_mean(1 / theta_ll, 1 / theta_rr) # isothermal wb
+    theta_avg = Trixi.inv_ln_mean(1 / theta_ll, 1 / theta_rr)
     f1 = 0.0
     f2 =
         v2_ll * jump_v1 * normal_direction[2] - v2_ll * jump_v2 * normal_direction[1] +
@@ -119,13 +119,24 @@ coordinates_max = (20_000.0, 10_000.0)
 # 32, 16
 trees_per_dimension = (32, 16)
 
+coordinates_max = (20_000.0, 10_000.0)
+RealT = Float64
+function mapping(xi, eta)
+    x = xi + RealT(0.1) * sinpi(xi) * sinpi(eta)
+    y = eta + RealT(0.1) * sinpi(xi) * sinpi(eta)
+    return SVector(
+        RealT(20000) * RealT(0.5) * (RealT(1) + x),
+        RealT(10000) * RealT(0.5) * (RealT(1) + y),
+    )
+end
+
 mesh = P4estMesh(
     trees_per_dimension,
     polydeg = polydeg,
-    coordinates_min = coordinates_min,
-    coordinates_max = coordinates_max,
+    mapping = mapping,
     periodicity = (true, false),
     initial_refinement_level = 0,
+    RealT = RealT,
 )
 
 semi = SemidiscretizationHyperbolic(
