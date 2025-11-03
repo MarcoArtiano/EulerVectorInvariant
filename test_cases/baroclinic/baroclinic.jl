@@ -13,6 +13,7 @@ using Invariant
 using Invariant.Trixi
 using LinearAlgebra: norm
 
+include("plots.jl")
 # Unperturbed balanced steady-state.
 # Returns primitive variables with only the velocity in longitudinal direction (rho, u, p).
 # The other velocity components are zero.
@@ -213,7 +214,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 const SECONDS_PER_DAY = 8.64e4
 ###############################################################################
 # ODE solvers, callbacks etc.
-T = 10 # 10 days
+T = 1 # 10 days
 tspan = (0.0, T * SECONDS_PER_DAY) # time in seconds for 10 days
 
 ode = semidiscretize(semi, tspan)
@@ -241,3 +242,5 @@ sol = solve(ode,
             SSPRK43(thread = Trixi.True());
             abstol = tol, reltol = tol, ode_default_options()...,
             callback = callbacks)
+
+ contour_baroclinic(sol, semi, sol, semi, trees_per_cube_face, 2* (polydeg+  1), equations, equations)
