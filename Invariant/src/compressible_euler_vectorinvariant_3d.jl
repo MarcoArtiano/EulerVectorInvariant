@@ -135,8 +135,7 @@ end
     u_ll,
     u_rr,
     normal_direction::AbstractVector,
-    equations::CompressibleEulerVectorInvariantEquations3D,
-)
+    equations::CompressibleEulerVectorInvariantEquations3D)
 
     rho_ll, v1_ll, v2_ll, v3_ll, rho_theta_ll = u_ll
     rho_rr, v1_rr, v2_rr, v3_rr, rho_theta_rr = u_rr
@@ -169,17 +168,20 @@ end
     c_ll = sqrt(equations.gamma * equations.R * T_ll)
     c_rr = sqrt(equations.gamma * equations.R * T_rr)
 
+    p_ll = exner_ll * rho_theta_ll * equations.R
+    p_rr = exner_rr * rho_theta_rr * equations.R
+    norm_ = norm(normal_direction)
     c = 0.5f0 * (c_ll + c_rr)
-    c_adv = 0.5f0 * abs((v_dot_n_ll + v_dot_n_rr)) / norm(normal_direction)
-    diss1 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[1] / norm(normal_direction)
-    diss2 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[2] / norm(normal_direction)
-    diss3 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[3] / norm(normal_direction)
-    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr)
-    f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 -0.5f0 * c_adv / rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) *norm(normal_direction)
-    f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 -0.5f0 * c_adv / rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) *norm(normal_direction)
-    f4 = kin_avg * 0.5f0 * normal_direction[3] - diss3 -0.5f0 * c_adv / rho_avg * (rho_rr * v3_rr - rho_ll * v3_ll) *norm(normal_direction)
-    # a partial_x b = partial_x ( ab) - b partial_x a  = > c_p theta grad exner = grad ( exner theta) - exner grad theta 
-		# a partial_x b = (flux(a) jump(b) | i + 1/2 + flux(a) jump(b) |i -1/2)/ (2 Delta x)
+    c = 340.0
+    disst = - 1 / (2 * c) * (p_rr - p_ll) * norm_
+    c_adv = 0.5f0 * abs((v_dot_n_ll + v_dot_n_rr)) / norm(normal_direction) * 0 
+    diss1 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[1] / norm_
+    diss2 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[2] / norm_
+    diss3 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[3] / norm_
+    f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr) + disst
+    f2 = kin_avg * 0.5f0 * normal_direction[1] - diss1 -0.5f0 * c_adv / rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) *norm(normal_direction) + v1_avg/rho_avg * disst
+    f3 = kin_avg * 0.5f0 * normal_direction[2] - diss2 -0.5f0 * c_adv / rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) *norm(normal_direction) + v2_avg/rho_avg * disst
+    f4 = kin_avg * 0.5f0 * normal_direction[3] - diss3 -0.5f0 * c_adv / rho_avg * (rho_rr * v3_rr - rho_ll * v3_ll) *norm(normal_direction) + v3_avg/rho_avg * disst
     if f1 >= 0
         f5 = f1 * theta_ll
     else
@@ -193,6 +195,80 @@ end
     g2 = vorticity_x + theta_grad_exner * normal_direction[1]
     g3 = vorticity_y + theta_grad_exner * normal_direction[2]
     g4 = vorticity_z + theta_grad_exner * normal_direction[3]
+    return SVector(f1, f2 + 0.5f0 * g2, f3 + 0.5f0 * g3, f4 + 0.5f0 * g4, f5, zero(eltype(u_ll))), SVector(f1, f2 - 0.5f0 * g2, f3 - 0.5f0 * g3, f4 - 0.5f0 * g4, f5, zero(eltype(u_ll)))
+end
+
+@inline function flux_energy_stable_mod(
+    u_ll,
+    u_rr,
+    normal_direction::AbstractVector,
+    equations::CompressibleEulerVectorInvariantEquations3D)
+
+    rho_ll, v1_ll, v2_ll, v3_ll, rho_theta_ll = u_ll
+    rho_rr, v1_rr, v2_rr, v3_rr, rho_theta_rr = u_rr
+    _, _, _, _, exner_ll = cons2primexner(u_ll, equations)
+    _, _, _, _, exner_rr = cons2primexner(u_rr, equations)
+    theta_ll = rho_theta_ll / rho_ll
+    theta_rr = rho_theta_rr / rho_rr
+
+    v_dot_n_ll = v1_ll * normal_direction[1] + v2_ll * normal_direction[2] + v3_ll * normal_direction[3]
+    v_dot_n_rr = v1_rr * normal_direction[1] + v2_rr * normal_direction[2] + v3_rr * normal_direction[3]
+
+    # Average each factor of products in flux
+    rho_avg = 0.5f0 * (rho_ll + rho_rr)
+    theta_avg = 0.5f0 * (theta_ll + theta_rr)
+    v1_avg = 0.5f0 * (v1_ll + v1_rr)
+    v2_avg = 0.5f0 * (v2_ll + v2_rr)
+    v3_avg = 0.5f0 * (v3_ll + v3_rr)
+
+    jump_v1 = v1_rr - v1_ll
+    jump_v2 = v2_rr - v2_ll
+    jump_v3 = v3_rr - v3_ll
+
+    rho_v_ll = v1_ll * rho_ll * normal_direction[1] + v2_ll * rho_ll * normal_direction[2] + v3_ll * rho_ll * normal_direction[3]
+    rho_v_rr = v1_rr * rho_rr * normal_direction[1] + v2_rr * rho_rr * normal_direction[2] + v3_rr * rho_rr * normal_direction[3]
+
+    T_ll = theta_ll * exner_ll
+    T_rr = theta_rr * exner_rr
+
+    c_ll = sqrt(equations.gamma * equations.R * T_ll)
+    c_rr = sqrt(equations.gamma * equations.R * T_rr)
+
+    p_ll = exner_ll * rho_theta_ll * equations.R
+    p_rr = exner_rr * rho_theta_rr * equations.R
+    norm_ = norm(normal_direction)
+    c = 0.5f0 * (c_ll + c_rr)
+    c = 340.0
+    disst = - 1 / (2 * c) * (p_rr - p_ll) * norm_
+    c_adv = 0.5f0 * abs((v_dot_n_ll + v_dot_n_rr)) / norm(normal_direction)  
+    diss1 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[1] / norm_
+    diss2 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[2] / norm_
+    diss3 = 0.5f0 * c / rho_avg * (rho_v_rr - rho_v_ll) * normal_direction[3] / norm_
+    v_interface = 0.5f0 * (v_dot_n_ll + v_dot_n_rr) - 1 / (2 * c * rho) * (p_rr - p_ll) * norm_
+
+    if (v_interface > 0)
+	f1, f2, f3, f4, f5 = u_ll * v_interface
+    else
+	f1, f2, f3, f4, f5 = u_rr * v_interface
+    end
+    #f1 = rho_avg * 0.5f0 * (v_dot_n_ll + v_dot_n_rr) + disst 
+    f2 = - diss1 -0.5f0 * c_adv / rho_avg * (rho_rr * v1_rr - rho_ll * v1_ll) *norm(normal_direction) + v1_avg * disst
+    f3 = - diss2 -0.5f0 * c_adv / rho_avg * (rho_rr * v2_rr - rho_ll * v2_ll) *norm(normal_direction) + v2_avg * disst
+    f4 = - diss3 -0.5f0 * c_adv / rho_avg * (rho_rr * v3_rr - rho_ll * v3_ll) *norm(normal_direction) + v3_avg * disst
+   # if f1 >= 0
+   #     f5 = f1 * theta_ll
+   # else
+   #     f5 = f1 * theta_rr
+   # end
+    theta_grad_exner =  equations.c_p * theta_avg * (exner_rr - exner_ll)  # inv_ln_mean(1/theta_ll, 1/theta_rr)    
+	
+    advection = v1_avg * normal_direction[1] + v2_avg * normal_direction[2] + v3_avg * normal_direction[3] 
+    advection_x = advection * jump_v1
+    advection_y = advection * jump_v2
+    advection_z = advection * jump_v3
+    g2 = advection_x + theta_grad_exner * normal_direction[1]
+    g3 = advection_y + theta_grad_exner * normal_direction[2]
+    g4 = advection_z + theta_grad_exner * normal_direction[3]
     return SVector(f1, f2 + 0.5f0 * g2, f3 + 0.5f0 * g3, f4 + 0.5f0 * g4, f5, zero(eltype(u_ll))), SVector(f1, f2 - 0.5f0 * g2, f3 - 0.5f0 * g3, f4 - 0.5f0 * g4, f5, zero(eltype(u_ll)))
 end
 

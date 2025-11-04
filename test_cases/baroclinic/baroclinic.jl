@@ -199,6 +199,8 @@ boundary_conditions = Dict(:inside => boundary_condition_slip_wall,
 polydeg = 5
 surface_flux = (flux_energy_stable, flux_zero)
 volume_flux = (flux_invariant_turbo, flux_zero)
+surface_flux = (flux_energy_stable_mod, flux_zero)
+volume_flux = (flux_invariant_adv_turbo, flux_zero)
 
 solver = DGSEM(polydeg = polydeg, surface_flux = surface_flux,
                volume_integral = VolumeIntegralFluxDifferencing(volume_flux))
@@ -214,7 +216,7 @@ semi = SemidiscretizationHyperbolic(mesh, equations, initial_condition, solver,
 const SECONDS_PER_DAY = 8.64e4
 ###############################################################################
 # ODE solvers, callbacks etc.
-T = 1 # 10 days
+T = 10 # 10 days
 tspan = (0.0, T * SECONDS_PER_DAY) # time in seconds for 10 days
 
 ode = semidiscretize(semi, tspan)

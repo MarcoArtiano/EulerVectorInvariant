@@ -11,7 +11,7 @@ include("noncons_kernel_3d.jl")
 export CompressibleEulerVectorInvariantEquations2D
 export CompressibleEulerVectorInvariantEquations3D
 
-export flux_zero, flux_invariant_turbo, flux_energy_stable
+export flux_zero, flux_invariant_turbo, flux_energy_stable, flux_energy_stable_mod, flux_invariant_adv_turbo
 
 export well_balanced_v1, well_balanced_v2
 
